@@ -1,6 +1,5 @@
 use isahc::prelude::*;
 
-// Inspired by https://unam.re/blog/making-twitter-api
 #[derive(Clone)]
 pub struct ConnectionInfo {
     pub bearer: Option<String>,
@@ -41,6 +40,7 @@ pub async fn get_info(
         conn_type: nostr_bot::ConnectionType::Direct,
     };
 
+    // Rewrite of the Python code found at https://unam.re/blog/making-twitter-api
     let mut text = send_request("https://twitter.com/home?precache=1", &dummy_info).await?;
 
     let d = select::document::Document::from(text.as_str());
