@@ -1,9 +1,11 @@
+use isahc::prelude::*;
 use log::debug;
 use nostr_bot::FunctorType;
 
 mod simpledb;
 mod tostr;
 mod twitter;
+mod twitter_api;
 mod utils;
 
 use tostr::State;
@@ -12,11 +14,36 @@ use tostr::State;
 async fn main() {
     nostr_bot::init_logger();
 
+    // let username = "lopp";
+    // let info = twitter_api::get_info(nostr_bot::ConnectionType::Direct)
+        // .await
+        // .unwrap();
+    // let tweets = twitter_api::get_tweets(username, utils::unix_timestamp() - 24 * 60 * 60, &info)
+        // .await
+        // .unwrap();
+
+    // for t in tweets {
+        // println!("{} {}", t.timestamp, t.tweet);
+    // }
+
+    // match    twitter_api::get_profile_pic(username, &info).await {
+        // Ok(url) => println!("profile pic url: {}", url),
+        // Err(e) => println!("Failed to lookup users profile pic url: {}", e),
+    // }
+
+    // return;
+
     let args = std::env::args().collect::<Vec<String>>();
     if args.len() != 2 {
         println!("Usage: {} --clearnet|--tor", args[0]);
         std::process::exit(1);
     }
+
+    let twitter_info = match args[1].as_str() {
+        "--clearnet" => {twitter_api::get_info(nostr_bot::ConnectionType::Direct)}
+        "--tor" => twitter_api::get_info(nostr_bot::ConnectionType::Socks5),
+        _ => panic!("Incorrect network settings"),
+    }.await.unwrap();
 
     let config_path = std::path::PathBuf::from("config");
     let config = utils::parse_config(&config_path);
@@ -34,6 +61,7 @@ async fn main() {
         ))),
         error_sender: tx.clone(),
         started_timestamp: nostr_bot::unix_timestamp(),
+        twitter_info,
     });
 
     let start_existing = {

@@ -1,13 +1,15 @@
 use log::{debug, info};
 
+
 use crate::utils;
+use crate::twitter_api;
 
 const DATE_FORMAT_STR: &str = "%Y-%m-%d %H:%M:%S";
 
 pub struct Tweet {
-    timestamp: u64,
-    tweet: String,
-    link: String,
+    pub timestamp: u64,
+    pub tweet: String,
+    pub link: String,
 }
 
 pub fn get_tweet_event(tweet: &Tweet) -> nostr_bot::EventNonSigned {
@@ -41,32 +43,6 @@ pub async fn user_exists(username: &String) -> bool {
         .unwrap();
 
     status.success()
-}
-
-pub async fn get_pic_url(username: &String) -> String {
-    let pic_cmd = format!(
-        r#"twint --user-full -u '{}' 2>&1 | sed 's/.*Avatar: \(https.*\)/\1/' | tr -d \\n"#,
-        username
-    );
-    debug!("Runnings bash -c '{}", pic_cmd);
-
-    let stdout = async_process::Command::new("bash")
-        .arg("-c")
-        .arg(pic_cmd)
-        .output()
-        .await
-        .expect("twint command failed")
-        .stdout;
-
-    let pic_url = String::from_utf8(stdout).unwrap();
-
-    if pic_url.starts_with("http") {
-        debug!("Found pic url {} for {}", pic_url, username);
-        pic_url
-    } else {
-        info!("Unable to find picture for {}", username);
-        "".to_string()
-    }
 }
 
 pub async fn get_new_tweets(

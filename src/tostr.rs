@@ -5,6 +5,7 @@ use rand::Rng;
 
 use crate::simpledb;
 use crate::twitter;
+use crate::twitter_api;
 use crate::utils;
 
 type Receiver = tokio::sync::mpsc::Receiver<ConnectionMessage>;
@@ -31,6 +32,8 @@ pub struct TostrState {
     pub error_sender: tokio::sync::mpsc::Sender<ConnectionMessage>,
 
     pub started_timestamp: u64,
+
+    pub twitter_info: twitter_api::ConnectionInfo,
 }
 
 pub type State = nostr_bot::State<TostrState>;
@@ -178,13 +181,14 @@ pub async fn handle_random(event: nostr_bot::Event, state: State) -> nostr_bot::
 pub async fn handle_add(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
     let words = event.content.split_whitespace().collect::<Vec<_>>();
     if words.len() < 2 {
-        debug!("Invalid !add command >{}< (missing username).", event.content);
+        debug!(
+            "Invalid !add command >{}< (missing username).",
+            event.content
+        );
         return nostr_bot::get_reply(event, "Error: Missing username.".to_string());
     }
 
-    let username = words[1]
-        .to_ascii_lowercase()
-        .replace('@', "");
+    let username = words[1].to_ascii_lowercase().replace('@', "");
 
     let db = state.lock().await.db.clone();
     let config = state.lock().await.config.clone();
@@ -204,11 +208,10 @@ pub async fn handle_add(event: nostr_bot::Event, state: State) -> nostr_bot::Eve
             format!("Hi, sorry, couldn't add new account. I'm already running at my max capacity ({} users).", config.max_follows));
     }
 
-    if !twitter::user_exists(&username).await {
-        return nostr_bot::get_reply(
-            event,
-            format!("Hi, I wasn't able to find {} on Twitter :(.", username),
-        );
+    let twitter_info = state.lock().await.twitter_info.clone();
+    // Use get_pic_url to check if the user exists
+    if let Err(e) = twitter_api::get_pic_url(&username, &twitter_info).await {
+        return nostr_bot::get_reply(event, format!("Hi, I got an error: {}", e));
     }
 
     let keypair = utils::get_random_keypair();
@@ -225,11 +228,21 @@ pub async fn handle_add(event: nostr_bot::Event, state: State) -> nostr_bot::Eve
     );
 
     {
-        let sender = state.lock().await.sender.clone();
-        let tx = state.lock().await.error_sender.clone();
+        let state = state.lock().await;
+        let sender = state.sender.clone();
+        let tx = state.error_sender.clone();
         let refresh_interval_secs = config.refresh_interval_secs;
+        let twitter_info = state.twitter_info.clone();
         tokio::spawn(async move {
-            update_user(username, &keypair, sender, tx, refresh_interval_secs).await;
+            update_user(
+                username,
+                &keypair,
+                sender,
+                tx,
+                refresh_interval_secs,
+                twitter_info,
+            )
+            .await;
         });
     }
 
@@ -272,8 +285,17 @@ pub async fn start_existing(state: State) {
         {
             let refresh = state.config.refresh_interval_secs;
             let sender = state.sender.clone();
+            let twitter_info = state.twitter_info.clone();
             tokio::spawn(async move {
-                update_user(username, &keypair, sender, error_sender, refresh).await;
+                update_user(
+                    username,
+                    &keypair,
+                    sender,
+                    error_sender,
+                    refresh,
+                    twitter_info,
+                )
+                .await;
             });
         }
     }
@@ -299,11 +321,19 @@ pub async fn update_user(
     sender: nostr_bot::Sender,
     tx: ErrorSender,
     refresh_interval_secs: u64,
+    conn_info: twitter_api::ConnectionInfo,
 ) {
     // fake_worker(username, refresh_interval_secs).await;
     // return;
 
-    let pic_url = twitter::get_pic_url(&username).await;
+    let pic_url = match twitter_api::get_pic_url(&username, &conn_info)
+        .await {
+            Ok(pic_url) => {
+            debug!("pic_url for {}: {}", username, pic_url);
+            pic_url}, 
+            Err(_) => {warn!("Unable to find profile pic for {}.", username); "".to_string()
+            }
+        };
     let event = nostr_bot::Event::new(
         keypair,
         utils::unix_timestamp(),
@@ -317,7 +347,8 @@ pub async fn update_user(
 
     sender.lock().await.send(event).await;
 
-    let mut since: chrono::DateTime<chrono::offset::Local> = std::time::SystemTime::now().into();
+    // let mut since: chrono::DateTime<chrono::offset::Local> = std::time::SystemTime::now().into();
+    let mut since = nostr_bot::unix_timestamp();
 
     loop {
         debug!(
@@ -326,11 +357,12 @@ pub async fn update_user(
         );
         tokio::time::sleep(std::time::Duration::from_secs(refresh_interval_secs)).await;
 
-        let until = std::time::SystemTime::now().into();
-        let new_tweets = twitter::get_new_tweets(&username, since, until).await;
+    let until = nostr_bot::unix_timestamp();
+        let new_tweets = twitter_api::get_tweets(&username, since, until, &conn_info).await;
 
         match new_tweets {
             Ok(new_tweets) => {
+                info!("Found {} new tweets from {}", new_tweets.len(), username);
                 // --since seems to be inclusive and --until exclusive so this should be fine
                 since = until;
 

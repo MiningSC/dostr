@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nostr-bot = "0.2"
+nostr-bot = { git = "https://github.com/slaninas/nostr-bot", rev = "080c9337aa7d46f990543d46431a2cf4cce252f2" }
 
 async-process = "1.4.0"
 chrono = "0.4.19"
@@ -26,3 +26,6 @@ tokio-tungstenite = {version = "0.17.1", features = ["native-tls"]}
 tungstenite = "0.17.2"
 url = "2.2.2"
 compound_duration = "1.2.0"
+select = "0.5.0"
+isahc = "1.7.2"
+regex = "1.6.0"
