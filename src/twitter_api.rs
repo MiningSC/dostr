@@ -22,10 +22,14 @@ async fn send_request(url: &str, info: &ConnectionInfo) -> Result<String, std::i
     };
 
     let req = match info.conn_type {
-        nostr_bot::ConnectionType::Direct => req,
-        nostr_bot::ConnectionType::Socks5 => req.proxy(isahc::http::uri::Uri::from_static(
-            "socks5h://127.0.0.1:9050",
-        )),
+        nostr_bot::ConnectionType::Direct => {
+            req}
+        ,
+        nostr_bot::ConnectionType::Socks5 => {
+            req.proxy(isahc::http::uri::Uri::from_static(
+                "socks5h://127.0.0.1:9050",
+            ))
+        }
     };
 
     req.body("").unwrap().send_async().await?.text().await
@@ -37,7 +41,7 @@ pub async fn get_info(
     let dummy_info = ConnectionInfo {
         bearer: None,
         guest_token: None,
-        conn_type: nostr_bot::ConnectionType::Direct,
+        conn_type: conn_type.clone(),
     };
 
     // Rewrite of the Python code found at https://unam.re/blog/making-twitter-api
