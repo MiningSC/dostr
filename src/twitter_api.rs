@@ -29,13 +29,7 @@ async fn send_request(url: &str, info: &ConnectionInfo) -> Result<String, std::i
         )),
     };
 
-    req.body("")
-        .unwrap()
-        .send_async()
-        .await
-        .unwrap()
-        .text()
-        .await
+    req.body("").unwrap().send_async().await?.text().await
 }
 
 pub async fn get_info(
@@ -96,7 +90,10 @@ async fn tweet_request(
     info: &ConnectionInfo,
 ) -> Result<String, std::io::Error> {
     let url = "https://api.twitter.com/2/search/adaptive.json";
-    let search_str = format!("from:{}%20since:{}%20until:{}", username, since_timestamp, until_timestamp);
+    let search_str = format!(
+        "from:{}%20since:{}%20until:{}",
+        username, since_timestamp, until_timestamp
+    );
     let params = vec![
         ("include_can_media_tag", "1"),
         ("include_ext_alt_text", "true"),
@@ -161,10 +158,7 @@ fn parse_tweets(username: &str, json: serde_json::Value) -> Vec<crate::twitter::
     tweets
 }
 
-pub async fn user_exists(
-    username: &str,
-    info: &ConnectionInfo,
-) -> Result<bool, std::io::Error> {
+pub async fn user_exists(username: &str, info: &ConnectionInfo) -> Result<bool, std::io::Error> {
     let now = crate::utils::unix_timestamp();
     let response = tweet_request(username, now, now, "-1", info).await?;
     let js: serde_json::Value = serde_json::from_str(&response).unwrap();
@@ -187,7 +181,8 @@ pub async fn get_tweets(
     let mut all_tweets = vec![];
     let mut cursor = "-1".to_string();
     for i in 0..10 {
-        let response = tweet_request(username, since_timestamp, until_timestamp, &cursor, info).await?;
+        let response =
+            tweet_request(username, since_timestamp, until_timestamp, &cursor, info).await?;
         // println!("response {}", response);
 
         let js: serde_json::Value = serde_json::from_str(&response).unwrap();
@@ -239,7 +234,9 @@ fn get_cursor(js: &serde_json::Value) -> String {
 pub async fn get_pic_url(username: &str, info: &ConnectionInfo) -> Result<String, String> {
     let profile_url = format!("https://api.twitter.com/graphql/jMaTS-_Ea8vh9rpKggJbCQ/UserByScreenName?variables=%7B%22screen_name%22%3A%20%22{}%22%2C%20%22withHighlightedLabel%22%3A%20false%7D", username);
 
-    let mut response = send_request(&profile_url, info).await.map_err(|e| "Unable to connect to Twitter.".to_string())?;
+    let mut response = send_request(&profile_url, info)
+        .await
+        .map_err(|e| "Unable to connect to Twitter.".to_string())?;
 
     let js: serde_json::Value = serde_json::from_str(&response).unwrap();
 
@@ -257,5 +254,4 @@ pub async fn get_pic_url(username: &str, info: &ConnectionInfo) -> Result<String
     } else {
         Ok(url)
     }
-
 }
