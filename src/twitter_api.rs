@@ -204,7 +204,7 @@ pub async fn get_tweets(
     all_tweets.sort_by(|a, b| b.timestamp.partial_cmp(&a.timestamp).unwrap());
     let mut all_tweets = (all_tweets
         .into_iter()
-        .filter(|t| t.timestamp >= since_timestamp)
+        .filter(|t| t.timestamp >= since_timestamp && !t.tweet.starts_with('@'))
         .collect::<Vec<_>>());
 
     // Follow links to the final destinations
