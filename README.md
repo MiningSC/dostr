@@ -18,8 +18,7 @@ Now the bot should be running and waiting for mentions. Just reply to its messag
 It relays only new tweets that were posted after you launched it.
 
 ## Tor
-**NOT WORKING IN THIS VERSION**
-~~In case `--tor` is used connections to both relay and Twitter *should* be going through tor. But if you need full anonymity please **check yourself there are no leaks**.~~
+In case `--tor` is used connections to both relay and Twitter *should* be going through tor. But if you need full anonymity please **check yourself there are no leaks**.
 
 ## Known limitations/issues
 - Heavy CPU load when starting the bot that already follows lot of users
