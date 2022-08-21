@@ -198,10 +198,16 @@ pub async fn get_tweets(
     }
 
     all_tweets.sort_by(|a, b| b.timestamp.partial_cmp(&a.timestamp).unwrap());
-    Ok(all_tweets
+    let mut all_tweets = (all_tweets
         .into_iter()
         .filter(|t| t.timestamp >= since_timestamp)
-        .collect::<Vec<_>>())
+        .collect::<Vec<_>>());
+
+    // Follow links to the final destinations
+    crate::twitter::follow_links(&mut all_tweets).await;
+
+    Ok(all_tweets)
+
 }
 
 fn get_cursor(js: &serde_json::Value) -> String {

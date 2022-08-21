@@ -14,25 +14,6 @@ use tostr::State;
 async fn main() {
     nostr_bot::init_logger();
 
-    // let username = "lopp";
-    // let info = twitter_api::get_info(nostr_bot::ConnectionType::Direct)
-        // .await
-        // .unwrap();
-    // let tweets = twitter_api::get_tweets(username, utils::unix_timestamp() - 24 * 60 * 60, &info)
-        // .await
-        // .unwrap();
-
-    // for t in tweets {
-        // println!("{} {}", t.timestamp, t.tweet);
-    // }
-
-    // match    twitter_api::get_profile_pic(username, &info).await {
-        // Ok(url) => println!("profile pic url: {}", url),
-        // Err(e) => println!("Failed to lookup users profile pic url: {}", e),
-    // }
-
-    // return;
-
     let args = std::env::args().collect::<Vec<String>>();
     if args.len() != 2 {
         println!("Usage: {} --clearnet|--tor", args[0]);
