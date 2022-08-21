@@ -3,9 +3,9 @@ use isahc::prelude::*;
 // Inspired by https://unam.re/blog/making-twitter-api
 #[derive(Clone)]
 pub struct ConnectionInfo {
-    bearer: Option<String>,
-    guest_token: Option<String>,
-    conn_type: nostr_bot::ConnectionType,
+    pub bearer: Option<String>,
+    pub guest_token: Option<String>,
+    pub conn_type: nostr_bot::ConnectionType,
 }
 
 async fn send_request(url: &str, info: &ConnectionInfo) -> Result<String, std::io::Error> {
@@ -204,10 +204,9 @@ pub async fn get_tweets(
         .collect::<Vec<_>>());
 
     // Follow links to the final destinations
-    crate::twitter::follow_links(&mut all_tweets).await;
+    crate::twitter::follow_links(&mut all_tweets, info).await;
 
     Ok(all_tweets)
-
 }
 
 fn get_cursor(js: &serde_json::Value) -> String {
