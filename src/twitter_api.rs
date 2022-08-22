@@ -22,14 +22,10 @@ async fn send_request(url: &str, info: &ConnectionInfo) -> Result<String, std::i
     };
 
     let req = match info.conn_type {
-        nostr_bot::ConnectionType::Direct => {
-            req}
-        ,
-        nostr_bot::ConnectionType::Socks5 => {
-            req.proxy(isahc::http::uri::Uri::from_static(
-                "socks5h://127.0.0.1:9050",
-            ))
-        }
+        nostr_bot::ConnectionType::Direct => req,
+        nostr_bot::ConnectionType::Socks5 => req.proxy(isahc::http::uri::Uri::from_static(
+            "socks5h://127.0.0.1:9050",
+        )),
     };
 
     req.body("").unwrap().send_async().await?.text().await
