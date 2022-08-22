@@ -177,17 +177,18 @@ pub async fn get_tweets(
     since_timestamp: u64,
     until_timestamp: u64,
     info: &ConnectionInfo,
-) -> Result<Vec<crate::twitter::Tweet>, std::io::Error> {
+) -> Result<Vec<crate::twitter::Tweet>, String> {
     let mut all_tweets = vec![];
     let mut cursor = "-1".to_string();
     for i in 0..10 {
-        let response =
-            tweet_request(username, since_timestamp, until_timestamp, &cursor, info).await?;
+        let response = tweet_request(username, since_timestamp, until_timestamp, &cursor, info)
+            .await
+            .map_err(|e| format!("Fail while calling tweet_request: {}", e))?;
         // println!("response {}", response);
 
         let js: serde_json::Value = serde_json::from_str(&response).unwrap();
 
-        cursor = get_cursor(&js);
+        cursor = get_cursor(&js)?;
 
         let mut new_tweets = parse_tweets(username, js);
         if new_tweets.is_empty() {
@@ -209,30 +210,33 @@ pub async fn get_tweets(
     Ok(all_tweets)
 }
 
-fn get_cursor(js: &serde_json::Value) -> String {
+fn get_cursor(js: &serde_json::Value) -> Result<String, String> {
+    let error_message = format!(
+        "Getting cursor but json response does not contain expected data, response: >{}<.",
+        js
+    );
+
     let entries = js["timeline"]["instructions"][0]["addEntries"]["entries"]
         .as_array()
-        .unwrap(); //[-1]["content"]["operation"]["cursor"]["value"];
+        .ok_or(&error_message)?;
 
-    let entry = match entries.into_iter().last() {
-        Some(entry) => entry.as_object(),
-        None => return "".to_string(),
-    };
+    let entry = entries.into_iter().last().ok_or(&error_message)?;
 
-    match entry {
-        Some(entry) => match entry["content"]["operation"]["cursor"]["value"].as_str() {
-            Some(cursor) => cursor.to_string(),
-            None => js["timeline"]["instructions"]
-                .as_array()
-                .unwrap()
-                .into_iter()
-                .last()
-                .unwrap()["replaceEntry"]["entry"]["content"]["operation"]["cursor"]["value"]
-                .as_str()
-                .unwrap()
-                .to_string(),
-        },
-        None => panic!("You should not be here"),
+    if let Some(cursor) = entry["content"]["operation"]["cursor"]["value"].as_str() {
+        Ok(cursor.to_string())
+    } else {
+        let cursor = js["timeline"]["instructions"]
+            .as_array()
+            .ok_or(&error_message)?
+            .into_iter()
+            .last()
+            .ok_or(&error_message)?["replaceEntry"]["entry"]["content"]["operation"]["cursor"]
+            ["value"]
+            .as_str()
+            .ok_or(&error_message)?
+            .to_string();
+
+        Ok(cursor)
     }
 }
 
