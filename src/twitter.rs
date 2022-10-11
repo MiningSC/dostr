@@ -1,9 +1,7 @@
-use log::{debug, info};
+use log::debug;
 
 use crate::twitter_api;
 use crate::utils;
-
-const DATE_FORMAT_STR: &str = "%Y-%m-%d %H:%M:%S";
 
 pub struct Tweet {
     pub timestamp: u64,

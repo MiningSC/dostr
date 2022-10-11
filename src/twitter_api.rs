@@ -104,7 +104,7 @@ pub async fn get_info(conn_type: nostr_bot::ConnectionType) -> Result<TwitterInf
     }));
 
     // Rewrite of the Python code found at https://unam.re/blog/making-twitter-api
-    let mut text =
+    let text =
         send_request_impl("https://twitter.com/home?precache=1", dummy_info.clone()).await?;
 
     let js_with_bearer = {
@@ -130,7 +130,7 @@ pub async fn get_info(conn_type: nostr_bot::ConnectionType) -> Result<TwitterInf
     // let guest_token = None;
     info!("guest_token: {:?}", guest_token);
 
-    let mut text = send_request_impl(&js_with_bearer, dummy_info.clone()).await?;
+    let text = send_request_impl(&js_with_bearer, dummy_info.clone()).await?;
 
     // Regexp from twint: grep -E ",[a-z]=\"[^\"]*\",[a-z]=\"[0-9]{8}
     // Orig Rust regexp
@@ -228,7 +228,6 @@ fn parse_tweets(username: &str, json: serde_json::Value) -> Vec<crate::twitter::
     tweets
 }
 
-const DATE_FORMAT_STR: &str = "%Y-%m-%d %H:%M:%S %z";
 pub async fn get_tweets(
     username: &str,
     since_timestamp: u64,
@@ -237,7 +236,9 @@ pub async fn get_tweets(
 ) -> Result<Vec<crate::twitter::Tweet>, String> {
     let mut all_tweets = vec![];
     let mut cursor = "-1".to_string();
-    for i in 0..10 {
+    // Tweets are not sent in one batch but cursor needs to be set for new "page",
+    // assuming here 10 requests should be usually enough
+    for _i in 0..10 {
         let response = tweet_request(
             username,
             since_timestamp,
@@ -262,10 +263,10 @@ pub async fn get_tweets(
     }
 
     all_tweets.sort_by(|a, b| b.timestamp.partial_cmp(&a.timestamp).unwrap());
-    let mut all_tweets = (all_tweets
+    let mut all_tweets = all_tweets
         .into_iter()
         .filter(|t| t.timestamp >= since_timestamp && !t.tweet.starts_with('@'))
-        .collect::<Vec<_>>());
+        .collect::<Vec<_>>();
 
     // Follow links to the final destinations
     crate::twitter::follow_links(&mut all_tweets, info.clone()).await;
@@ -329,9 +330,9 @@ fn get_cursor(js: &serde_json::Value) -> Result<String, String> {
 pub async fn get_pic_url(username: &str, info: TwitterInfo) -> Result<String, String> {
     let profile_url = format!("https://api.twitter.com/graphql/jMaTS-_Ea8vh9rpKggJbCQ/UserByScreenName?variables=%7B%22screen_name%22%3A%20%22{}%22%2C%20%22withHighlightedLabel%22%3A%20false%7D", username);
 
-    let mut response = send_request(&profile_url, info)
+    let response = send_request(&profile_url, info)
         .await
-        .map_err(|e| "Unable to connect to Twitter.".to_string())?;
+        .map_err(|e| format!("Unable to connect to Twitter.: {}", e))?;
 
     println!("response:{}", response);
     let js: serde_json::Value = serde_json::from_str(&response).unwrap();

@@ -1,4 +1,3 @@
-use isahc::prelude::*;
 use log::debug;
 use nostr_bot::FunctorType;
 
