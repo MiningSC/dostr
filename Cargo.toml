@@ -8,7 +8,6 @@ edition = "2021"
 [dependencies]
 nostr-bot = { git = "https://github.com/slaninas/nostr-bot", rev = "080c9337aa7d46f990543d46431a2cf4cce252f2" }
 
-async-process = "1.4.0"
 chrono = "0.4.19"
 env_logger = "0.9.0"
 futures-util = "0.3.21"
