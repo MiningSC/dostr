@@ -8,8 +8,11 @@ use crate::twitter;
 use crate::twitter_api;
 use crate::utils;
 
+use twitter_api::TwitterInfo;
+
 type Receiver = tokio::sync::mpsc::Receiver<ConnectionMessage>;
 type ErrorSender = tokio::sync::mpsc::Sender<ConnectionMessage>;
+
 
 #[derive(PartialEq, Debug)]
 enum ConnectionStatus {
@@ -33,7 +36,7 @@ pub struct TostrState {
 
     pub started_timestamp: u64,
 
-    pub twitter_info: twitter_api::ConnectionInfo,
+    pub twitter_info: TwitterInfo,
 }
 
 pub type State = nostr_bot::State<TostrState>;
@@ -210,7 +213,7 @@ pub async fn handle_add(event: nostr_bot::Event, state: State) -> nostr_bot::Eve
 
     let twitter_info = state.lock().await.twitter_info.clone();
     // Use get_pic_url to check if the user exists
-    if let Err(e) = twitter_api::get_pic_url(&username, &twitter_info).await {
+    if let Err(e) = twitter_api::get_pic_url(&username, twitter_info.clone()).await {
         return nostr_bot::get_reply(event, format!("Hi, I got an error: {}", e));
     }
 
@@ -321,12 +324,12 @@ pub async fn update_user(
     sender: nostr_bot::Sender,
     tx: ErrorSender,
     refresh_interval_secs: u64,
-    conn_info: twitter_api::ConnectionInfo,
+    conn_info: TwitterInfo,
 ) {
     // fake_worker(username, refresh_interval_secs).await;
     // return;
 
-    let pic_url = match twitter_api::get_pic_url(&username, &conn_info)
+    let pic_url = match twitter_api::get_pic_url(&username, conn_info.clone())
         .await {
             Ok(pic_url) => {
             debug!("pic_url for {}: {}", username, pic_url);
@@ -358,7 +361,7 @@ pub async fn update_user(
         tokio::time::sleep(std::time::Duration::from_secs(refresh_interval_secs)).await;
 
     let until = nostr_bot::unix_timestamp();
-        let new_tweets = twitter_api::get_tweets(&username, since, until, &conn_info).await;
+        let new_tweets = twitter_api::get_tweets(&username, since, until, conn_info.clone()).await;
 
         match new_tweets {
             Ok(new_tweets) => {

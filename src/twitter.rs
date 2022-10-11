@@ -27,7 +27,7 @@ pub fn get_tweet_event(tweet: &Tweet) -> nostr_bot::EventNonSigned {
 }
 
 
-pub async fn follow_links(tweets: &mut Vec<Tweet>, info: &twitter_api::ConnectionInfo) {
+pub async fn follow_links(tweets: &mut Vec<Tweet>, info: twitter_api::TwitterInfo) {
     let finder = linkify::LinkFinder::new();
 
     for tweet in tweets {
@@ -44,7 +44,7 @@ pub async fn follow_links(tweets: &mut Vec<Tweet>, info: &twitter_api::Connectio
             // TODO: Use only one crate for http request. Currently, reqwest is returning 404 for
             // twitter.com and isohc doesn't seem to support returning final url after redirects
             //
-            let client = match info.conn_type {
+            let client = match info.lock().unwrap().conn_type {
                 nostr_bot::ConnectionType::Direct => reqwest::ClientBuilder::new(),
                 nostr_bot::ConnectionType::Socks5 => reqwest::ClientBuilder::new().proxy(reqwest::Proxy::all("socks5h://127.0.0.1:9050").unwrap())
             };

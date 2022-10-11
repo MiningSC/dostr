@@ -24,7 +24,8 @@ async fn main() {
         "--clearnet" => {twitter_api::get_info(nostr_bot::ConnectionType::Direct)}
         "--tor" => twitter_api::get_info(nostr_bot::ConnectionType::Socks5),
         _ => panic!("Incorrect network settings"),
-    }.await.unwrap();
+    }.await.expect("Unable to get Twitter access tokens.");
+
 
     let config_path = std::path::PathBuf::from("config");
     let config = utils::parse_config(&config_path);

@@ -1,4 +1,7 @@
 use isahc::prelude::*;
+use log::{info, debug, warn};
+
+pub type TwitterInfo = std::sync::Arc<std::sync::Mutex<ConnectionInfo>>;
 
 #[derive(Clone)]
 pub struct ConnectionInfo {
@@ -7,9 +10,61 @@ pub struct ConnectionInfo {
     pub conn_type: nostr_bot::ConnectionType,
 }
 
-async fn send_request(url: &str, info: &ConnectionInfo) -> Result<String, std::io::Error> {
-    log::debug!("Running send_request with bearer >{:?}<", info.bearer);
+async fn send_request(url: &str, info: TwitterInfo) -> Result<String, String> {
+    let result = send_request_impl(url, info.clone()).await;
+    match result {
+        Ok(result) => {
+            let js: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+            if js.is_object(){
+                let obj = match js.as_object() {
+                    Some(obj) => obj,
+                    None => panic!("Failed to send request"),
+                };
+
+                if obj.contains_key("errors") {
+                    warn!("Failed to send request, trying to get new access tokens and sending again.");
+                    refresh_tokens(info.clone()).await?;
+                    return send_request_impl(url, info.clone()).await.map_err(|e| e.to_string());
+                };
+
+                Ok(result)
+            } else {
+                Ok(result)
+            }
+
+        },
+        Err(_) => {
+            warn!("Failed to send request, trying to get new access tokens and sending again.");
+            refresh_tokens(info.clone()).await?;
+
+            match send_request_impl(url, info).await {
+                Ok(result) => {debug!("New access tokens working."); Ok(result)},
+                Err(e) => Err(e.to_string()),
+            }
+
+        }
+
+    }
+
+}
+
+async fn refresh_tokens(info: TwitterInfo) -> Result<(), String> {
+    let conn_type = info.lock().unwrap().conn_type.clone();
+    let new_info = get_info(conn_type).await.map_err(|e| e.to_string())?;
+    info!("Got new guest token: {:?}", new_info.lock().unwrap().guest_token);
+
+    *info.lock().unwrap() = new_info.lock().unwrap().clone();
+
+    Ok(())
+}
+
+async fn send_request_impl(url: &str, info: TwitterInfo) -> Result<String, std::io::Error> {
+    log::debug!("Running send_request_impl with bearer >{:?}<", info.lock().unwrap().bearer);
     let req = isahc::Request::get(url);
+    let info = info.lock().unwrap().clone();
+
+    debug!("Sending request to {} with authorization={:?}, x-guest-token={:?}", url, info.bearer, info.guest_token);
 
     let req = match &info.bearer {
         Some(bearer) => req.header("authorization", bearer),
@@ -33,39 +88,45 @@ async fn send_request(url: &str, info: &ConnectionInfo) -> Result<String, std::i
 
 pub async fn get_info(
     conn_type: nostr_bot::ConnectionType,
-) -> Result<ConnectionInfo, std::io::Error> {
-    let dummy_info = ConnectionInfo {
+) -> Result<TwitterInfo, std::io::Error> {
+    let dummy_info = std::sync::Arc::new(std::sync::Mutex::new(ConnectionInfo {
         bearer: None,
         guest_token: None,
         conn_type: conn_type.clone(),
-    };
+    }));
 
     // Rewrite of the Python code found at https://unam.re/blog/making-twitter-api
-    let mut text = send_request("https://twitter.com/home?precache=1", &dummy_info).await?;
+    let mut text = send_request_impl("https://twitter.com/home?precache=1", dummy_info.clone()).await?;
 
-    let d = select::document::Document::from(text.as_str());
-    let js = d
+    let js_with_bearer = {
+        let d = select::document::Document::from(text.as_str());
+
+        d
         .find(select::predicate::Name("script"))
         .filter_map(|n| n.attr("src"))
         .filter(|x| x.contains("/main"))
-        .collect::<Vec<_>>();
+        .collect::<Vec<_>>()[0].to_string()
+    };
 
-    let js_with_bearer = js[0];
     let re = regex::Regex::new(r#""gt=(\d{19})"#).unwrap();
 
     let guest_token = match re.captures_iter(&text).next() {
         Some(gt) => match gt.get(1) {
-            Some(gt) => gt.as_str(),
-            None => panic!(),
+            Some(gt) => gt.as_str().to_string(),
+            None => panic!("Unable to get guest token"),
         },
         None => panic!(),
     };
-    println!("guest_token: {:?}", guest_token);
 
-    let mut text = send_request(js_with_bearer, &dummy_info).await?;
+    // let guest_token = None;
+    info!("guest_token: {:?}", guest_token);
 
-    // grep -E ",[a-z]=\"[^\"]*\",[a-z]=\"[0-9]{8}
-    let re = regex::Regex::new(r#",[a-zA-Z]="([^"]*)",[a-zA-Z]="\d{8}"#).unwrap();
+    let mut text = send_request_impl(&js_with_bearer, dummy_info.clone()).await?;
+
+    // Regexp from twint: grep -E ",[a-z]=\"[^\"]*\",[a-z]=\"[0-9]{8}
+    // Orig Rust regexp
+    // let re = regex::Regex::new(r#",[a-zA-Z]="([^"]*)",[a-zA-Z]="\d{8}"#).unwrap();
+    let re = regex::Regex::new(r#",s="([^"]*)",[a-zA-Z]="\d{8}"#).unwrap();
     let bearer = match re.captures_iter(&text).last() {
         Some(gt) => match gt.get(1) {
             Some(gt) => gt.as_str(),
@@ -73,13 +134,13 @@ pub async fn get_info(
         },
         None => panic!(),
     };
-    println!("bearer: {}", bearer);
+    info!("bearer: {}", bearer);
 
-    Ok(ConnectionInfo {
+    Ok(std::sync::Arc::new(std::sync::Mutex::new(ConnectionInfo {
         bearer: Some(format!("Bearer {}", bearer)),
-        guest_token: Some(guest_token.to_string()),
+        guest_token: Some(guest_token),
         conn_type,
-    })
+    })))
 }
 
 async fn tweet_request(
@@ -87,8 +148,8 @@ async fn tweet_request(
     since_timestamp: u64,
     until_timestamp: u64,
     cursor: &str,
-    info: &ConnectionInfo,
-) -> Result<String, std::io::Error> {
+    info: TwitterInfo,
+) -> Result<String, String> {
     let url = "https://api.twitter.com/2/search/adaptive.json";
     let search_str = format!(
         "from:{}%20since:{}%20until:{}",
@@ -126,7 +187,7 @@ async fn tweet_request(
     let x = params.join("&");
 
     let complete = format!("{}?{}", url, x);
-    send_request(&complete, &info).await
+    send_request(&complete, info.clone()).await
 }
 
 fn parse_tweets(username: &str, json: serde_json::Value) -> Vec<crate::twitter::Tweet> {
@@ -158,30 +219,17 @@ fn parse_tweets(username: &str, json: serde_json::Value) -> Vec<crate::twitter::
     tweets
 }
 
-pub async fn user_exists(username: &str, info: &ConnectionInfo) -> Result<bool, std::io::Error> {
-    let now = crate::utils::unix_timestamp();
-    let response = tweet_request(username, now, now, "-1", info).await?;
-    let js: serde_json::Value = serde_json::from_str(&response).unwrap();
-    if js["globalObjects"]["users"].as_object().unwrap().is_empty() {
-        log::warn!("Returning false, js: {:?}", js);
-        return Ok(false);
-    }
-
-    log::warn!("Returning true");
-    return Ok(true);
-}
-
 const DATE_FORMAT_STR: &str = "%Y-%m-%d %H:%M:%S %z";
 pub async fn get_tweets(
     username: &str,
     since_timestamp: u64,
     until_timestamp: u64,
-    info: &ConnectionInfo,
+    info: TwitterInfo,
 ) -> Result<Vec<crate::twitter::Tweet>, String> {
     let mut all_tweets = vec![];
     let mut cursor = "-1".to_string();
     for i in 0..10 {
-        let response = tweet_request(username, since_timestamp, until_timestamp, &cursor, info)
+        let response = tweet_request(username, since_timestamp, until_timestamp, &cursor, info.clone())
             .await
             .map_err(|e| format!("Fail while calling tweet_request: {}", e))?;
         // println!("response {}", response);
@@ -205,12 +253,12 @@ pub async fn get_tweets(
         .collect::<Vec<_>>());
 
     // Follow links to the final destinations
-    crate::twitter::follow_links(&mut all_tweets, info).await;
+    crate::twitter::follow_links(&mut all_tweets, info.clone()).await;
 
     Ok(all_tweets)
 }
 
-fn get_cursor(js: &serde_json::Value) -> Result<String, String> {
+fn try_get_cursor(js: &serde_json::Value) -> Result<String, String> {
     let error_message = format!(
         "Getting cursor but json response does not contain expected data, response: >{}<.",
         js
@@ -240,13 +288,35 @@ fn get_cursor(js: &serde_json::Value) -> Result<String, String> {
     }
 }
 
-pub async fn get_pic_url(username: &str, info: &ConnectionInfo) -> Result<String, String> {
+// https://github.com/minamotorin/twint/blob/9bfe0d5fb708c9e09cd2b9456bad08576569cb51/twint/feed.py#L57
+fn get_cursor(js: &serde_json::Value) -> Result<String, String> {
+    let error_message = String::from("Cursor find fallback failed");
+
+    match try_get_cursor(js) {
+        Ok(cursor) => Ok(cursor),
+        Err(e) => {
+            log::warn!("Unable to get cursor on the first try: {}", e);
+            // Fallback
+            let cursor = js
+                .as_object()
+                .ok_or(&error_message)?
+                .into_iter()
+                .last()
+                .ok_or(&error_message)?.1.to_string();
+            info!("Got cursor on the second try.");
+            Ok(cursor)
+        }
+    }
+}
+
+pub async fn get_pic_url(username: &str, info: TwitterInfo) -> Result<String, String> {
     let profile_url = format!("https://api.twitter.com/graphql/jMaTS-_Ea8vh9rpKggJbCQ/UserByScreenName?variables=%7B%22screen_name%22%3A%20%22{}%22%2C%20%22withHighlightedLabel%22%3A%20false%7D", username);
 
     let mut response = send_request(&profile_url, info)
         .await
         .map_err(|e| "Unable to connect to Twitter.".to_string())?;
 
+    println!("response:{}", response);
     let js: serde_json::Value = serde_json::from_str(&response).unwrap();
 
     let url = js["data"]["user"]["legacy"]["profile_image_url_https"].to_string();
