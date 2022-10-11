@@ -248,7 +248,6 @@ pub async fn get_tweets(
         )
         .await
         .map_err(|e| format!("Fail while calling tweet_request: {}", e))?;
-        // println!("response {}", response);
 
         let js: serde_json::Value = serde_json::from_str(&response).unwrap();
 
@@ -334,7 +333,6 @@ pub async fn get_pic_url(username: &str, info: TwitterInfo) -> Result<String, St
         .await
         .map_err(|e| format!("Unable to connect to Twitter.: {}", e))?;
 
-    println!("response:{}", response);
     let js: serde_json::Value = serde_json::from_str(&response).unwrap();
 
     let url = js["data"]["user"]["legacy"]["profile_image_url_https"].to_string();
