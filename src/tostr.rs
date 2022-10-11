@@ -13,7 +13,6 @@ use twitter_api::TwitterInfo;
 type Receiver = tokio::sync::mpsc::Receiver<ConnectionMessage>;
 type ErrorSender = tokio::sync::mpsc::Sender<ConnectionMessage>;
 
-
 #[derive(PartialEq, Debug)]
 enum ConnectionStatus {
     Success,
@@ -329,14 +328,16 @@ pub async fn update_user(
     // fake_worker(username, refresh_interval_secs).await;
     // return;
 
-    let pic_url = match twitter_api::get_pic_url(&username, conn_info.clone())
-        .await {
-            Ok(pic_url) => {
+    let pic_url = match twitter_api::get_pic_url(&username, conn_info.clone()).await {
+        Ok(pic_url) => {
             debug!("pic_url for {}: {}", username, pic_url);
-            pic_url}, 
-            Err(_) => {warn!("Unable to find profile pic for {}.", username); "".to_string()
-            }
-        };
+            pic_url
+        }
+        Err(_) => {
+            warn!("Unable to find profile pic for {}.", username);
+            "".to_string()
+        }
+    };
     let event = nostr_bot::Event::new(
         keypair,
         utils::unix_timestamp(),
@@ -360,7 +361,7 @@ pub async fn update_user(
         );
         tokio::time::sleep(std::time::Duration::from_secs(refresh_interval_secs)).await;
 
-    let until = nostr_bot::unix_timestamp();
+        let until = nostr_bot::unix_timestamp();
         let new_tweets = twitter_api::get_tweets(&username, since, until, conn_info.clone()).await;
 
         match new_tweets {

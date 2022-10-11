@@ -1,8 +1,7 @@
 use log::{debug, info};
 
-
-use crate::utils;
 use crate::twitter_api;
+use crate::utils;
 
 const DATE_FORMAT_STR: &str = "%Y-%m-%d %H:%M:%S";
 
@@ -26,7 +25,6 @@ pub fn get_tweet_event(tweet: &Tweet) -> nostr_bot::EventNonSigned {
     }
 }
 
-
 pub async fn follow_links(tweets: &mut Vec<Tweet>, info: twitter_api::TwitterInfo) {
     let finder = linkify::LinkFinder::new();
 
@@ -46,10 +44,10 @@ pub async fn follow_links(tweets: &mut Vec<Tweet>, info: twitter_api::TwitterInf
             //
             let client = match info.lock().unwrap().conn_type {
                 nostr_bot::ConnectionType::Direct => reqwest::ClientBuilder::new(),
-                nostr_bot::ConnectionType::Socks5 => reqwest::ClientBuilder::new().proxy(reqwest::Proxy::all("socks5h://127.0.0.1:9050").unwrap())
+                nostr_bot::ConnectionType::Socks5 => reqwest::ClientBuilder::new()
+                    .proxy(reqwest::Proxy::all("socks5h://127.0.0.1:9050").unwrap()),
             };
             let request = client.build().unwrap().get(link.as_str());
-
 
             let final_url = match request.send().await {
                 Ok(response) => response.url().as_str().to_string(),

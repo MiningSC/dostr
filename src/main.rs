@@ -21,11 +21,12 @@ async fn main() {
     }
 
     let twitter_info = match args[1].as_str() {
-        "--clearnet" => {twitter_api::get_info(nostr_bot::ConnectionType::Direct)}
+        "--clearnet" => twitter_api::get_info(nostr_bot::ConnectionType::Direct),
         "--tor" => twitter_api::get_info(nostr_bot::ConnectionType::Socks5),
         _ => panic!("Incorrect network settings"),
-    }.await.expect("Unable to get Twitter access tokens.");
-
+    }
+    .await
+    .expect("Unable to get Twitter access tokens.");
 
     let config_path = std::path::PathBuf::from("config");
     let config = utils::parse_config(&config_path);
