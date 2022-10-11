@@ -191,7 +191,7 @@ async fn tweet_request(
 
     let params = params
         .iter()
-        .map(|x| format!("{}={}", x.0.to_string(), x.1.to_string()))
+        .map(|x| format!("{}={}", x.0, x.1))
         .collect::<Vec<_>>();
     let x = params.join("&");
 
@@ -284,7 +284,7 @@ fn try_get_cursor(js: &serde_json::Value) -> Result<String, String> {
         .as_array()
         .ok_or(&error_message)?;
 
-    let entry = entries.into_iter().last().ok_or(&error_message)?;
+    let entry = entries.iter().last().ok_or(&error_message)?;
 
     if let Some(cursor) = entry["content"]["operation"]["cursor"]["value"].as_str() {
         Ok(cursor.to_string())
@@ -292,7 +292,7 @@ fn try_get_cursor(js: &serde_json::Value) -> Result<String, String> {
         let cursor = js["timeline"]["instructions"]
             .as_array()
             .ok_or(&error_message)?
-            .into_iter()
+            .iter()
             .last()
             .ok_or(&error_message)?["replaceEntry"]["entry"]["content"]["operation"]["cursor"]
             ["value"]
