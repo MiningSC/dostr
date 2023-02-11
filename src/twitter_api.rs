@@ -107,15 +107,15 @@ pub async fn get_info(conn_type: nostr_bot::ConnectionType) -> Result<TwitterInf
     let text =
         send_request_impl("https://twitter.com/home?precache=1", dummy_info.clone()).await?;
 
-    let js_with_bearer = {
-        let d = select::document::Document::from(text.as_str());
+    // let js_with_bearer = {
+        // let d = select::document::Document::from(text.as_str());
 
-        d.find(select::predicate::Name("script"))
-            .filter_map(|n| n.attr("src"))
-            .filter(|x| x.contains("/main"))
-            .collect::<Vec<_>>()[0]
-            .to_string()
-    };
+        // d.find(select::predicate::Name("script"))
+            // .filter_map(|n| n.attr("src"))
+            // .filter(|x| x.contains("/main"))
+            // .collect::<Vec<_>>()[0]
+            // .to_string()
+    // };
 
     let re = regex::Regex::new(r#""gt=(\d{19})"#).unwrap();
 
@@ -130,19 +130,22 @@ pub async fn get_info(conn_type: nostr_bot::ConnectionType) -> Result<TwitterInf
     // let guest_token = None;
     info!("guest_token: {:?}", guest_token);
 
-    let text = send_request_impl(&js_with_bearer, dummy_info.clone()).await?;
+    // let text = send_request_impl(&js_with_bearer, dummy_info.clone()).await?;
 
     // Regexp from twint: grep -E ",[a-z]=\"[^\"]*\",[a-z]=\"[0-9]{8}
     // Orig Rust regexp
     // let re = regex::Regex::new(r#",[a-zA-Z]="([^"]*)",[a-zA-Z]="\d{8}"#).unwrap();
-    let re = regex::Regex::new(r#",s="([^"]*)",[a-zA-Z]="\d{8}"#).unwrap();
-    let bearer = match re.captures_iter(&text).last() {
-        Some(gt) => match gt.get(1) {
-            Some(gt) => gt.as_str(),
-            None => panic!(),
-        },
-        None => panic!(),
-    };
+    // let re = regex::Regex::new(r#",s="([^"]*)",[a-zA-Z]="\d{8}"#).unwrap();
+    // let bearer = match re.captures_iter(&text).last() {
+        // Some(gt) => match gt.get(1) {
+            // Some(gt) => gt.as_str(),
+            // None => panic!(),
+        // },
+        // None => panic!(),
+    // };
+    // TODO: Get the bearer token from JS file (revert the commit and fix it)
+    let bearer = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
+
     info!("bearer: {}", bearer);
 
     Ok(std::sync::Arc::new(std::sync::Mutex::new(ConnectionInfo {
