@@ -10,7 +10,7 @@ pub struct Tweet {
 }
 
 pub fn get_tweet_event(tweet: &Tweet) -> nostr_bot::EventNonSigned {
-    let formatted = format!("{} ([source]({}))", tweet.tweet, tweet.link);
+    let formatted = format!("{} (source: {})", tweet.tweet, tweet.link);
 
     nostr_bot::EventNonSigned {
         created_at: utils::unix_timestamp(),
