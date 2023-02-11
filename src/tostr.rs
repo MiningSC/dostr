@@ -325,8 +325,35 @@ pub async fn update_user(
     refresh_interval_secs: u64,
     conn_info: TwitterInfo,
 ) {
+    let mut since = nostr_bot::unix_timestamp();
+
+    let profile_event = |username, pic_url| {
+        nostr_bot::Event::new(
+            keypair,
+            utils::unix_timestamp(),
+            0,
+            vec![],
+            format!(
+                r#"{{"name":"tostr_{}","about":"Tweets forwarded from https://twitter.com/{} by [tostr](https://github.com/slaninas/tostr) bot.","picture":"{}"}}"#,
+                username, username, pic_url
+            ),
+        )
+    };
     // fake_worker(username, refresh_interval_secs).await;
     // return;
+
+    // Setup a profile without profile pic for now, the pic will be set later when we get the URL
+    sender.lock().await.send(profile_event(&username, "".to_string())).await;
+
+    // Don't start immediately but wait for random number of seconds instead to spread out API
+    // calls. This is usefull only for accounts that are already in the db when the bot is started.
+    let sleep_secs =  {
+        let mut rng = rand::thread_rng();
+        rng.gen_range(0..refresh_interval_secs)
+    };
+
+    debug!("Worker for {username} is going to sleep for {sleep_secs}.");
+    tokio::time::sleep(std::time::Duration::from_secs(sleep_secs)).await;
 
     let pic_url = match twitter_api::get_pic_url(&username, conn_info.clone()).await {
         Ok(pic_url) => {
@@ -338,28 +365,10 @@ pub async fn update_user(
             "".to_string()
         }
     };
-    let event = nostr_bot::Event::new(
-        keypair,
-        utils::unix_timestamp(),
-        0,
-        vec![],
-        format!(
-            r#"{{"name":"tostr_{}","about":"Tweets forwarded from https://twitter.com/{} by [tostr](https://github.com/slaninas/tostr) bot.","picture":"{}"}}"#,
-            username, username, pic_url
-        ),
-    );
 
-    sender.lock().await.send(event).await;
-
-    // let mut since: chrono::DateTime<chrono::offset::Local> = std::time::SystemTime::now().into();
-    let mut since = nostr_bot::unix_timestamp();
+    sender.lock().await.send(profile_event(&username, pic_url)).await;
 
     loop {
-        debug!(
-            "Worker for @{} is going to sleep for {} s",
-            username, refresh_interval_secs
-        );
-        tokio::time::sleep(std::time::Duration::from_secs(refresh_interval_secs)).await;
 
         let until = nostr_bot::unix_timestamp();
         let new_tweets = twitter_api::get_tweets(&username, since, until, conn_info.clone()).await;
@@ -398,6 +407,11 @@ pub async fn update_user(
                 warn!("{}", e);
             }
         }
+        debug!(
+            "Worker for @{} is going to sleep for {} s",
+            username, refresh_interval_secs
+        );
+        tokio::time::sleep(std::time::Duration::from_secs(refresh_interval_secs)).await;
         // break;
     }
 }
