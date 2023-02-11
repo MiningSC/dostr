@@ -787,7 +787,7 @@ checksum = "e4a24736216ec316047a1fc4252e27dabb04218aa4a3f37c6e7ddbf1f9782b54"
 [[package]]
 name = "nostr-bot"
 version = "0.2.3"
-source = "git+https://github.com/slaninas/nostr-bot?rev=080c9337aa7d46f990543d46431a2cf4cce252f2#080c9337aa7d46f990543d46431a2cf4cce252f2"
+source = "git+https://github.com/slaninas/nostr-bot?rev=d1f8707c8845eb0bbfac7afb6e4d6a89fa42b21c#d1f8707c8845eb0bbfac7afb6e4d6a89fa42b21c"
 dependencies = [
  "env_logger",
  "futures-util",

@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nostr-bot = { git = "https://github.com/slaninas/nostr-bot", rev = "080c9337aa7d46f990543d46431a2cf4cce252f2" }
+nostr-bot = { git = "https://github.com/slaninas/nostr-bot", rev = "d1f8707c8845eb0bbfac7afb6e4d6a89fa42b21c" }
 
 chrono = "0.4.19"
 env_logger = "0.9.0"
