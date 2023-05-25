@@ -4,7 +4,7 @@ use std::fmt::Write;
 use rand::Rng;
 
 use crate::simpledb;
-use crate::twitter;
+use crate::discord;
 use crate::utils;
 
 type Receiver = tokio::sync::mpsc::Receiver<ConnectionMessage>;
@@ -204,7 +204,7 @@ pub async fn handle_add(event: nostr_bot::Event, state: State) -> nostr_bot::Eve
             format!("Hi, sorry, couldn't add new account. I'm already running at my max capacity ({} users).", config.max_follows));
     }
 
-    if !twitter::user_exists(&username).await {
+    if !discord::user_exists(&username).await {
         return nostr_bot::get_reply(
             event,
             format!("Hi, I wasn't able to find {} on Twitter :(.", username),
@@ -303,7 +303,7 @@ pub async fn update_user(
     // fake_worker(username, refresh_interval_secs).await;
     // return;
 
-    let pic_url = twitter::get_pic_url(&username).await;
+    let pic_url = discord::get_pic_url(&username).await;
     let event = nostr_bot::Event::new(
         keypair,
         utils::unix_timestamp(),
@@ -327,7 +327,7 @@ pub async fn update_user(
         tokio::time::sleep(std::time::Duration::from_secs(refresh_interval_secs)).await;
 
         let until = std::time::SystemTime::now().into();
-        let new_tweets = twitter::get_new_tweets(&username, since, until).await;
+        let new_tweets = discord::get_new_tweets(&username, since, until).await;
 
         match new_tweets {
             Ok(new_tweets) => {
@@ -341,7 +341,7 @@ pub async fn update_user(
                     sender
                         .lock()
                         .await
-                        .send(twitter::get_tweet_event(tweet).sign(keypair))
+                        .send(discord::get_tweet_event(tweet).sign(keypair))
                         .await;
                 }
 

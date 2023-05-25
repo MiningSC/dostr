@@ -7,15 +7,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'tostr'",
+            "name": "Debug executable 'dostr'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=tostr",
-                    "--package=tostr"
+                    "--bin=dostr",
+                    "--package=dostr"
                 ],
                 "filter": {
-                    "name": "tostr",
+                    "name": "dostr",
                     "kind": "bin"
                 }
             },
@@ -25,16 +25,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'tostr'",
+            "name": "Debug unit tests in executable 'dostr'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=tostr",
-                    "--package=tostr"
+                    "--bin=dostr",
+                    "--package=dostr"
                 ],
                 "filter": {
-                    "name": "tostr",
+                    "name": "dostr",
                     "kind": "bin"
                 }
             },

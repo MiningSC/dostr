@@ -3,7 +3,7 @@ use nostr_bot::FunctorType;
 
 mod simpledb;
 mod dostr;
-mod twitter;
+mod discord;
 mod utils;
 
 use dostr::State;
