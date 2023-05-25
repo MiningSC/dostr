@@ -7,16 +7,35 @@ mod discord;
 mod utils;
 
 use dostr::State;
+use discord::{Handler};
+use serenity::Client;
+use tokio::sync::Mutex;
+use std::sync::Arc;
+use serenity::prelude::Context;
+use std::env;
 
 #[tokio::main]
 async fn main() {
     nostr_bot::init_logger();
+
+    let discord_context: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
 
     let args = std::env::args().collect::<Vec<String>>();
     if args.len() != 2 {
         println!("Usage: {} --clearnet|--tor", args[0]);
         std::process::exit(1);
     }
+
+    // Discord bot setup and start.
+    // Replace "DISCORD_TOKEN" with your actual Discord bot token
+    let discord_token = env::var("DISCORD_TOKEN").expect("Expected a Discord token in the environment");
+
+    let mut discord_client = Client::builder(&discord_token)
+        .event_handler(Handler { discord_context: Arc::clone(&discord_context) })
+        .await
+        .expect("Err creating Discord client");
+
+    let discord_future = discord_client.start();
 
     let config_path = std::path::PathBuf::from("config");
     let config = utils::parse_config(&config_path);
@@ -34,6 +53,7 @@ async fn main() {
         ))),
         error_sender: tx.clone(),
         started_timestamp: nostr_bot::unix_timestamp(),
+        discord_context: Arc::clone(&discord_context),
     });
 
     let start_existing = {
@@ -89,5 +109,10 @@ async fn main() {
         _ => panic!("Incorrect network settings"),
     }
 
-    bot.run().await;
+    // Run both the Nostr bot and the Discord bot concurrently
+    tokio::select! {
+        _ = bot.run() => {}
+        _ = discord_future => {}
+    }
+
 }
