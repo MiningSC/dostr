@@ -1,8 +1,8 @@
-# tostr
-/ˈtəʊstə(r)/
+# dostr
 
-**T**witter to n**ostr**.
-Bot that forwards tweets to [nostr](https://github.com/nostr-protocol/nostr).
+
+**D**idcord to n**ostr**.
+Bot that forwards discord messages to [nostr](https://github.com/nostr-protocol/nostr).
 
 Reply to its message with `!help` and it will show you all available commands.
 
