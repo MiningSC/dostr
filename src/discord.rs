@@ -1,185 +1,98 @@
-use log::{debug, info};
-
 use crate::utils;
 
-const DATE_FORMAT_STR: &str = "%Y-%m-%d %H:%M:%S";
+use serenity::{
+    async_trait,
+    model::{channel::Message, gateway::Ready, id::{ChannelId, UserId}},
+    prelude::*,
+};
+// use std::env;
+use std::sync::Arc;
 
-pub struct Tweet {
+struct DiscordMessage {
     timestamp: u64,
-    tweet: String,
-    link: String,
+    message: String,
 }
 
-pub fn get_tweet_event(tweet: &Tweet) -> nostr_bot::EventNonSigned {
-    let formatted = format!("{} ([source]({}))", tweet.tweet, tweet.link);
+pub struct Handler {
+    discord_context: std::sync::Arc<tokio::sync::Mutex<Option<serenity::prelude::Context>>>,
+}
 
-    nostr_bot::EventNonSigned {
-        created_at: utils::unix_timestamp(),
-        kind: 1,
-        tags: vec![vec![
-            "tweet_timestamp".to_string(),
-            format!("{}", tweet.timestamp),
-        ]],
-        content: formatted,
+#[async_trait]
+impl EventHandler for Handler {
+    async fn message(&self, ctx: Context, msg: Message) {
+        let discord_message = DiscordMessage {
+            timestamp: msg.timestamp.timestamp() as u64,
+            message: msg.content.clone(),
+        };
+        
+        get_discord_event(&discord_message, &msg.content).await;
+    }
+
+    async fn ready(&self, context: Context, ready: Ready) {
+        println!("{} is connected!", ready.user.name);
+        let mut discord_context = self.discord_context.lock().await;
+        *discord_context = Some(context);
     }
 }
 
-pub async fn user_exists(username: &String) -> bool {
-    let since: chrono::DateTime<chrono::offset::Local> = std::time::SystemTime::now().into();
+pub async fn user_exists(user_id: &str, ctx: Arc<Context>) -> bool {
+    let user_id: u64 = match user_id.parse() {
+        Ok(id) => id,
+        Err(_) => return false, // Invalid user_id was provided
+    };
 
-    let cmd = format!(
-        "twint -u '{}' --since \"{}\" 1>/dev/null",
-        username,
-        since.format(DATE_FORMAT_STR),
-    );
-    debug!("Running >{}<", cmd);
-    let status = async_process::Command::new("bash")
-        .arg("-c")
-        .arg(cmd)
-        .status()
-        .await
-        .unwrap();
-
-    status.success()
-}
-
-pub async fn get_pic_url(username: &String) -> String {
-    let pic_cmd = format!(
-        r#"twint --user-full -u '{}' 2>&1 | sed 's/.*Avatar: \(https.*\)/\1/' | tr -d \\n"#,
-        username
-    );
-    debug!("Runnings bash -c '{}", pic_cmd);
-
-    let stdout = async_process::Command::new("bash")
-        .arg("-c")
-        .arg(pic_cmd)
-        .output()
-        .await
-        .expect("twint command failed")
-        .stdout;
-
-    let pic_url = String::from_utf8(stdout).unwrap();
-
-    if pic_url.starts_with("http") {
-        debug!("Found pic url {} for {}", pic_url, username);
-        pic_url
-    } else {
-        info!("Unable to find picture for {}", username);
-        "".to_string()
+    match UserId(user_id).to_user(&(*ctx)).await {
+        Ok(_) => true,
+        Err(_) => false,
     }
 }
 
-pub async fn get_new_tweets(
-    username: &String,
-    since: chrono::DateTime<chrono::offset::Local>,
-    until: chrono::DateTime<chrono::offset::Local>,
-) -> Result<Vec<Tweet>, String> {
-    debug!("Checking new tweets from {}", username);
-    let workfile = format!("{}_workfile.csv", username);
-    let twint_date_format = "%Y-%m-%d %T %z";
+pub async fn get_pic_url(user_id: &str, ctx: Arc<Context>) -> Result<String, Box<dyn std::error::Error>> {
+    match user_id.parse::<u64>() {
+        Ok(id) => {
+            let user = UserId(id)
+                .to_user(&(*ctx))
+                .await?;
 
-    let cmd = format!(
-        "twint -u '{}' --since \"{}\" --until \"{}\" --csv -o {} 1>/dev/null",
-        username,
-        since.format(DATE_FORMAT_STR),
-        until.format(DATE_FORMAT_STR),
-        workfile
-    );
-    debug!("Running >{}<", cmd);
-    // TODO: Handle status
-    let output = async_process::Command::new("bash")
-        .arg("-c")
-        .arg(cmd)
-        .status()
-        .await
-        .unwrap();
-
-    if !output.success() {
-        return Err(format!("Unable to check for new tweets from {}", username));
+            Ok(user.face().to_owned())
+        },
+        Err(_) => {
+            Err("Failed to parse user ID".into())
+        }
     }
+}
 
-    let mut new_tweets = vec![];
-    match std::fs::read_to_string(workfile.clone()) {
-        Ok(content) => {
-            std::fs::remove_file(workfile).unwrap();
+pub async fn get_new_messages(
+    ctx: Arc<Context>,
+    channel_id: ChannelId,
+) -> Result<Vec<DiscordMessage>, String> {
+    let messages = channel_id.messages(&ctx, |retriever| retriever.limit(100)).await;
 
-            let csv = content.lines().collect::<Vec<_>>();
-
-            for item in csv.iter().skip(1) {
-                let line = item.split('\t').collect::<Vec<_>>();
-
-                let tweet = line[10].to_string();
-                // Filter out replies
-                if tweet.starts_with('@') {
-                    debug!("Ignoring reply >{}< from {}", tweet, username);
-                    continue;
-                }
-
-                let timestamp = chrono::DateTime::parse_from_str(
-                    &format!("{} {} {}", line[3], line[4], line[5]),
-                    twint_date_format,
-                )
-                .unwrap()
-                .timestamp() as u64;
-                new_tweets.push(Tweet {
-                    timestamp,
-                    tweet,
-                    link: line[20].to_string(),
+    match messages {
+        Ok(retrieved_messages) => {
+            let mut new_messages = vec![];
+            for message in retrieved_messages {
+                new_messages.push(DiscordMessage {
+                    timestamp: message.timestamp.timestamp() as u64,
+                    message: message.content,
                 });
             }
-
-            info!("Found {} new tweets from {}", new_tweets.len(), username);
+            Ok(new_messages)
         }
-        Err(_) => {
-            info!("No new tweets from {} found", username);
-        }
+        Err(why) => Err(format!("Error getting messages: {:?}", why)),
     }
-
-    // Follow links to the final destinations
-    follow_links(&mut new_tweets).await;
-
-    Ok(new_tweets)
 }
 
-async fn follow_links(tweets: &mut Vec<Tweet>) {
-    let finder = linkify::LinkFinder::new();
-
-    for tweet in tweets {
-        let text = &tweet.tweet;
-        let links: Vec<_> = finder.links(text).collect();
-
-        let mut curr_pos = 0;
-        let mut final_tweet = String::new();
-
-        for link in &links {
-            let start = link.start();
-            let end = link.end();
-
-            let request = reqwest::get(link.as_str()).await;
-
-            let final_url = match request {
-                Ok(response) => response.url().as_str().to_string(),
-                Err(e) => {
-                    debug!(
-                        "Failed to follow link >{}< ({}), using orignal url",
-                        link.as_str().to_string(),
-                        e
-                    );
-                    link.as_str().to_string()
-                }
-            };
-
-            final_tweet.push_str(&text[curr_pos..start]);
-            final_tweet.push_str(&final_url);
-            curr_pos = end;
+pub async fn get_discord_event(discord_message: &DiscordMessage, message_content: &String) -> nostr_bot::EventNonSigned {
+    // Here, you would use the details from `discord_message` to construct an event,
+    // similar to how you were constructing a Tweet event in the Twitter code.
+    // Please fill this part with your own logic.
+    let formatted = format!("{}", discord_message.message);
+    
+        nostr_bot::EventNonSigned {
+            created_at: utils::unix_timestamp(),
+            tags: vec![],
+            kind: 1,
+            content: formatted,
         }
-
-        final_tweet.push_str(&text[curr_pos..]);
-
-        debug!(
-            "follow_links: orig. tweet >{}<, final tweet >{}<",
-            text, final_tweet
-        );
-        tweet.tweet = final_tweet;
-    }
 }

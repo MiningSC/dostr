@@ -6,6 +6,9 @@ use rand::Rng;
 use crate::simpledb;
 use crate::discord;
 use crate::utils;
+use serenity::prelude::Context;
+use tokio::sync::Mutex;
+use std::sync::Arc;
 
 type Receiver = tokio::sync::mpsc::Receiver<ConnectionMessage>;
 type ErrorSender = tokio::sync::mpsc::Sender<ConnectionMessage>;
@@ -29,8 +32,8 @@ pub struct DostrState {
 
     // error_receiver: tokio::sync::mpsc::Receiver<bot::ConnectionMessage>,
     pub error_sender: tokio::sync::mpsc::Sender<ConnectionMessage>,
-
     pub started_timestamp: u64,
+    pub discord_context: std::sync::Arc<tokio::sync::Mutex<Option<serenity::prelude::Context>>>,
 }
 
 pub type State = nostr_bot::State<DostrState>;
@@ -148,7 +151,7 @@ pub async fn handle_random(event: nostr_bot::Event, state: State) -> nostr_bot::
         return nostr_bot::get_reply(
             event,
             String::from(
-                "Hi, there are no accounts. Try to add some using 'add twitter_username' command.",
+                "Hi, there are no accounts. Try to add some using 'add discord_username' command.",
             ),
         );
     }
@@ -204,10 +207,21 @@ pub async fn handle_add(event: nostr_bot::Event, state: State) -> nostr_bot::Eve
             format!("Hi, sorry, couldn't add new account. I'm already running at my max capacity ({} users).", config.max_follows));
     }
 
-    if !discord::user_exists(&username).await {
+    let state_lock = state.lock().await;
+    let discord_context_option = state_lock.discord_context.lock().await.clone();
+
+    // Check if the Context is present and pass it to the function
+    if let Some(discord_context) = discord_context_option {
+        if !discord::user_exists(&username, Arc::new(discord_context)).await {
+            return nostr_bot::get_reply(
+                event,
+                format!("Hi, I wasn't able to find {} on Discord :(.", username),
+            );
+        }
+    } else {
         return nostr_bot::get_reply(
             event,
-            format!("Hi, I wasn't able to find {} on Twitter :(.", username),
+            format!("Hi, there is no active Discord context. Please ensure that the bot is connected to Discord."),
         );
     }
 
@@ -225,16 +239,18 @@ pub async fn handle_add(event: nostr_bot::Event, state: State) -> nostr_bot::Eve
     );
 
     {
-        let sender = state.lock().await.sender.clone();
-        let tx = state.lock().await.error_sender.clone();
+        let sender = state_lock.sender.clone();
+        let tx = state_lock.error_sender.clone();
         let refresh_interval_secs = config.refresh_interval_secs;
+        let state_clone = state.clone();
         tokio::spawn(async move {
-            update_user(username, &keypair, sender, tx, refresh_interval_secs).await;
+            update_user(username, &keypair, sender, tx, refresh_interval_secs, state_clone).await;
         });
     }
 
     get_handle_response(event, &xonly_pubkey.to_string())
 }
+
 
 pub async fn uptime(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
     let uptime_seconds = nostr_bot::unix_timestamp() - state.lock().await.started_timestamp;
@@ -257,25 +273,35 @@ fn get_handle_response(event: nostr_bot::Event, new_bot_pubkey: &str) -> nostr_b
         kind: 1,
         tags: all_tags,
         content: format!(
-            "Hi, tweets will be forwarded to nostr by #[{}].",
+            "Hi, messages will be forwarded to nostr by #[{}].",
             last_tag_position
         ),
     }
 }
 
 pub async fn start_existing(state: State) {
-    let state = state.lock().await;
-    for (username, keypair) in state.db.lock().unwrap().get_follows() {
-        let error_sender = state.error_sender.clone();
-        info!("Starting worker for username {}", username);
+    let db;
+    let error_sender;
+    let config_refresh_interval_secs;
+    let sender;
+    {
+        let state_lock = state.lock().await;
+        db = state_lock.db.lock().unwrap().clone();
+        error_sender = state_lock.error_sender.clone();
+        config_refresh_interval_secs = state_lock.config.refresh_interval_secs;
+        sender = state_lock.sender.clone();
+    }
 
-        {
-            let refresh = state.config.refresh_interval_secs;
-            let sender = state.sender.clone();
-            tokio::spawn(async move {
-                update_user(username, &keypair, sender, error_sender, refresh).await;
-            });
-        }
+    for (username, keypair) in db.get_follows() {
+        info!("Starting worker for username {}", username);
+        
+        let refresh = config_refresh_interval_secs;
+        let sender_clone = sender.clone();
+        let error_sender_clone = error_sender.clone();
+        let state_clone = state.clone();
+        tokio::spawn(async move {
+            update_user(username, &keypair, sender_clone, error_sender_clone, refresh, state_clone).await;
+        });
     }
 
     info!("Done starting tasks for followed accounts.");
@@ -299,18 +325,21 @@ pub async fn update_user(
     sender: nostr_bot::Sender,
     tx: ErrorSender,
     refresh_interval_secs: u64,
+    state: Arc<Mutex<DostrState>>,
 ) {
     // fake_worker(username, refresh_interval_secs).await;
     // return;
+    let state_lock = state.lock().await;
+    let discord_context = &state_lock.discord_context;
 
-    let pic_url = discord::get_pic_url(&username).await;
+    let pic_url = discord::get_pic_url(discord_context.clone(), &username).await.unwrap_or_default();
     let event = nostr_bot::Event::new(
         keypair,
         utils::unix_timestamp(),
         0,
         vec![],
         format!(
-            r#"{{"name":"dostr_{}","about":"Tweets forwarded from https://twitter.com/{} by [dostr](https://github.com/MiningSC/dostr) bot.","picture":"{}"}}"#,
+            r#"{{"name":"dostr_{}","about":"Messages forwarded from https://discord.com/users/{} by [dostr](https://github.com/MiningSC/dostr) bot.","picture":"{}"}}"#,
             username, username, pic_url
         ),
     );
@@ -327,21 +356,21 @@ pub async fn update_user(
         tokio::time::sleep(std::time::Duration::from_secs(refresh_interval_secs)).await;
 
         let until = std::time::SystemTime::now().into();
-        let new_tweets = discord::get_new_tweets(&username, since, until).await;
+        let new_messages = discord::get_new_messages(discord_context, &username, since, until).await;
 
-        match new_tweets {
-            Ok(new_tweets) => {
+        match new_messages {
+            Ok(new_messages) => {
                 // --since seems to be inclusive and --until exclusive so this should be fine
                 since = until;
 
-                // twint returns newest tweets first, reverse the Vec here so that tweets are send to relays
+                // twint returns newest messages first, reverse the Vec here so that messages are send to relays
                 // in order they were published. Still the created_at field can easily be the same so in the
                 // end it depends on how the relays handle it
-                for tweet in new_tweets.iter().rev() {
+                for message in new_messages.iter().rev() {
                     sender
                         .lock()
                         .await
-                        .send(discord::get_tweet_event(tweet).sign(keypair))
+                        .send(discord::get_discord_event(message).sign(keypair))
                         .await;
                 }
 
