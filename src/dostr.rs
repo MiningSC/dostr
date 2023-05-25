@@ -370,7 +370,7 @@ pub async fn update_channel(
                     since = until;
 
                     for message in new_messages.iter().rev() {
-                        let event_non_signed = discord::get_discord_event(&message, message.get_message()).await;
+                        let event_non_signed = discord::get_discord_event(&message).await;
                         let signed_event = event_non_signed.sign(keypair);
                         sender
                             .lock()

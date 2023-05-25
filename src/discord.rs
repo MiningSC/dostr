@@ -13,6 +13,7 @@ pub struct DiscordMessage {
     message: String,
 }
 
+#[allow(dead_code)]
 impl DiscordMessage {
     pub fn get_message(&self) -> &String {
         &self.message
@@ -38,7 +39,7 @@ impl EventHandler for Handler {
             message: msg.content.clone(),
         };
 
-        get_discord_event(&discord_message, &msg.content).await;
+        get_discord_event(&discord_message).await;
     }
 
     async fn ready(&self, context: Context, ready: Ready) {
@@ -92,7 +93,7 @@ pub async fn get_new_messages(
     }
 }
 
-pub async fn get_discord_event(discord_message: &DiscordMessage, message_content: &String) -> nostr_bot::EventNonSigned {
+pub async fn get_discord_event(discord_message: &DiscordMessage) -> nostr_bot::EventNonSigned {
     
     let formatted = format!("{} {}", discord_message.timestamp, discord_message.message);
     
