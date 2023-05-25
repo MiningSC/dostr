@@ -6,7 +6,7 @@ Bot that forwards discord messages to [nostr](https://github.com/nostr-protocol/
 
 Reply to its message with `!help` and it will show you all available commands.
 
-Powered by [nostr-bot](https://github.com/slaninas/nostr-bot.git) and the Discord API.
+Powered by [nostr-bot](https://github.com/slaninas/nostr-bot.git) and Discord's API.
 
 ## How to run using Docker
 ```
