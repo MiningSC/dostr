@@ -28,18 +28,18 @@ impl SimpleDatabase {
                 debug!("unable to parse line: >{:?}<, skipping", split);
                 continue;
             }
-            let username = split[0];
+            let channel_id = split[0];
             let seckey = split[1];
 
-            match db.follows.insert(username.to_string(), seckey.to_string()) {
+            match db.follows.insert(channel_id.to_string(), seckey.to_string()) {
                 Some(_) => panic!(
-                    "Inconsistent database, username {} is more than once in the database",
-                    username
+                    "Inconsistent database, channel_id {} is more than once in the database",
+                    channel_id
                 ),
                 None => {
                     debug!(
-                        "Read from file: inserting username {} into database",
-                        username
+                        "Read from file: inserting channel_id {} into database",
+                        channel_id
                     );
                 }
             }
@@ -48,13 +48,13 @@ impl SimpleDatabase {
         db
     }
 
-    pub fn insert(&mut self, username: String, seckey: String) -> Result<(), String> {
-        if self.follows.contains_key(&username) {
+    pub fn insert(&mut self, channel_id: String, seckey: String) -> Result<(), String> {
+        if self.follows.contains_key(&channel_id) {
             return Err("Key already in the database".to_string());
         }
 
-        self.follows.insert(username.clone(), seckey.clone());
-        debug!("Added {} to the database", username);
+        self.follows.insert(channel_id.clone(), seckey.clone());
+        debug!("Added {} to the database", channel_id);
 
         let mut file = std::fs::OpenOptions::new()
             .write(true)
@@ -62,7 +62,7 @@ impl SimpleDatabase {
             .open(self.file.clone())
             .unwrap();
 
-        writeln!(file, "{}:{}", username, seckey).unwrap();
+        writeln!(file, "{}:{}", channel_id, seckey).unwrap();
         debug!("Wrote updated database to the file");
         Ok(())
     }
@@ -78,9 +78,9 @@ impl SimpleDatabase {
     pub fn get_follows(&self) -> std::collections::HashMap<String, secp256k1::KeyPair> {
         let mut result = std::collections::HashMap::<String, secp256k1::KeyPair>::new();
         let secp = secp256k1::Secp256k1::new();
-        for (username, secret) in &self.follows {
+        for (channel_id, secret) in &self.follows {
             result.insert(
-                username.clone(),
+                channel_id.clone(),
                 secp256k1::KeyPair::from_seckey_str(&secp, secret).unwrap(),
             );
         }
@@ -90,10 +90,14 @@ impl SimpleDatabase {
     pub fn follows_count(&self) -> usize {
         self.follows.len()
     }
+    #[allow(dead_code)]
+    pub fn is_channel_followed(&self, channel_id: &str) -> bool {
+        self.follows.contains_key(channel_id)
+    }
 }
 
-pub fn get_user_keypair(username: &str, db: Database) -> secp256k1::KeyPair {
+pub fn get_channel_keypair(channel_id: &str, db: Database) -> secp256k1::KeyPair {
     let secp = secp256k1::Secp256k1::new();
-    let existing_secret = db.lock().unwrap().get(username);
+    let existing_secret = db.lock().unwrap().get(channel_id);
     secp256k1::KeyPair::from_seckey_str(&secp, &existing_secret).unwrap()
 }

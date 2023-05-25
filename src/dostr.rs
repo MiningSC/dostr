@@ -1,12 +1,11 @@
 use log::{debug, info, warn};
 use std::fmt::Write;
-
 use rand::Rng;
-
 use crate::simpledb;
 use crate::discord;
 use crate::utils;
-use serenity::prelude::Context;
+//use serenity::prelude::Context;
+use serenity::model::id::ChannelId;
 use tokio::sync::Mutex;
 use std::sync::Arc;
 
@@ -58,10 +57,10 @@ pub async fn error_listener(
         if message.status != last_accepted_message.status {
             match message.status {
                 ConnectionStatus::Success => {
-                    message_to_send = Some("Connection to Twitter reestablished! :)".to_string());
+                    message_to_send = Some("Connection to Discord reestablished! :)".to_string());
                 }
                 ConnectionStatus::Failed => {
-                    message_to_send = Some("I can't connect to Twitter right now :(.".to_string());
+                    message_to_send = Some("I can't connect to Discord right now :(.".to_string());
                 }
             }
 
@@ -82,7 +81,7 @@ pub async fn error_listener(
                     ConnectionStatus::Success => {}
                     ConnectionStatus::Failed => {
                         message_to_send =
-                            Some("I'm still unable to connect to Twitter :(".to_string());
+                            Some("I'm still unable to connect to Discord :(".to_string());
                     }
                 }
                 last_accepted_message = message;
@@ -103,7 +102,7 @@ pub async fn error_listener(
     }
 }
 
-pub async fn handle_relays(
+pub async fn channel_relays(
     event: nostr_bot::Event,
     _state: State,
     bot: nostr_bot::BotInfo,
@@ -118,17 +117,17 @@ pub async fn handle_relays(
     nostr_bot::get_reply(event, text)
 }
 
-pub async fn handle_list(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
+pub async fn channel_list(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
     let follows = state.lock().await.db.lock().unwrap().get_follows();
-    let mut usernames = follows.keys().collect::<Vec<_>>();
-    usernames.sort();
+    let mut channel_ids = follows.keys().collect::<Vec<_>>();
+    channel_ids.sort();
 
     let mut tags = nostr_bot::tags_for_reply(event);
     let orig_tags_count = tags.len();
 
-    let mut text = format!("Hi, I'm following {} accounts:\n", usernames.len());
-    for (index, &username) in usernames.iter().enumerate() {
-        let secret = follows.get(username).unwrap();
+    let mut text = format!("Hi, I'm following {} channels:\n", channel_ids.len());
+    for (index, &channel_id) in channel_ids.iter().enumerate() {
+        let secret = follows.get(channel_id).unwrap();
         tags.push(vec![
             "p".to_string(),
             secret.x_only_public_key().0.to_string(),
@@ -144,23 +143,24 @@ pub async fn handle_list(event: nostr_bot::Event, state: State) -> nostr_bot::Ev
     }
 }
 
-pub async fn handle_random(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
+
+pub async fn channel_random(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
     let follows = state.lock().await.db.lock().unwrap().get_follows();
 
     if follows.is_empty() {
         return nostr_bot::get_reply(
             event,
             String::from(
-                "Hi, there are no accounts. Try to add some using 'add discord_username' command.",
+                "Hi, there are no channels. Try to add some using 'add discord_channel_id' command.",
             ),
         );
     }
 
     let index = rand::thread_rng().gen_range(0..follows.len());
 
-    let random_username = follows.keys().collect::<Vec<_>>()[index];
+    let random_channel_id = follows.keys().collect::<Vec<_>>()[index];
 
-    let secret = follows.get(random_username).unwrap();
+    let secret = follows.get(random_channel_id).unwrap();
 
     let mut tags = nostr_bot::tags_for_reply(event);
     tags.push(vec![
@@ -169,53 +169,54 @@ pub async fn handle_random(event: nostr_bot::Event, state: State) -> nostr_bot::
     ]);
     let mention_index = tags.len() - 1;
 
-    debug!("Command random: returning {}", random_username);
+    debug!("Command random: returning {}", random_channel_id);
     nostr_bot::EventNonSigned {
         created_at: utils::unix_timestamp(),
         kind: 1,
         tags,
-        content: format!("Hi, random account to follow: #[{}]", mention_index),
+        content: format!("Hi, random channel to follow: #[{}]", mention_index),
     }
 }
 
-pub async fn handle_add(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
+
+pub async fn channel_add(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
     let words = event.content.split_whitespace().collect::<Vec<_>>();
     if words.len() < 2 {
-        debug!("Invalid !add command >{}< (missing username).", event.content);
-        return nostr_bot::get_reply(event, "Error: Missing username.".to_string());
+        debug!("Invalid !add command >{}< (missing channel ID).", event.content);
+        return nostr_bot::get_reply(event, "Error: Missing channel ID.".to_string());
     }
 
-    let username = words[1]
+    let channel_id = words[1]
         .to_ascii_lowercase()
-        .replace('@', "");
+        .replace('#', "");
 
     let db = state.lock().await.db.clone();
     let config = state.lock().await.config.clone();
 
-    if db.lock().unwrap().contains_key(&username) {
-        let keypair = simpledb::get_user_keypair(&username, db);
+    if db.lock().unwrap().contains_key(&channel_id) {
+        let keypair = simpledb::get_channel_keypair(&channel_id, db);
         let (pubkey, _parity) = keypair.x_only_public_key();
         debug!(
-            "User {} already added before. Sending existing pubkey {}",
-            username, pubkey
+            "Channel ID {} already added before. Sending existing pubkey {}",
+            channel_id, pubkey
         );
-        return get_handle_response(event, &pubkey.to_string());
+        return get_channel_response(event, &pubkey.to_string());
     }
 
     if db.lock().unwrap().follows_count() + 1 > config.max_follows {
         return nostr_bot::get_reply(event,
-            format!("Hi, sorry, couldn't add new account. I'm already running at my max capacity ({} users).", config.max_follows));
+            format!("Hi, sorry, couldn't add new channel. I'm already running at my max capacity ({} channels).", config.max_follows));
     }
 
     let state_lock = state.lock().await;
     let discord_context_option = state_lock.discord_context.lock().await.clone();
-
+    let channel_id_num = ChannelId(channel_id.parse::<u64>().expect("Failed to parse channel ID"));
     // Check if the Context is present and pass it to the function
     if let Some(discord_context) = discord_context_option {
-        if !discord::user_exists(&username, Arc::new(discord_context)).await {
+        if !discord::channel_exists(&channel_id_num, Arc::new(discord_context)).await {
             return nostr_bot::get_reply(
                 event,
-                format!("Hi, I wasn't able to find {} on Discord :(.", username),
+                format!("Hi, I wasn't able to find channel ID {} on Discord :(.", channel_id),
             );
         }
     } else {
@@ -229,13 +230,13 @@ pub async fn handle_add(event: nostr_bot::Event, state: State) -> nostr_bot::Eve
 
     db.lock()
         .unwrap()
-        .insert(username.clone(), keypair.display_secret().to_string())
+        .insert(channel_id.clone(), keypair.display_secret().to_string())
         .unwrap();
     let (xonly_pubkey, _) = keypair.x_only_public_key();
-    let username = username.to_string();
+    let channel_id = channel_id.to_string();
     info!(
-        "Starting worker for username {}, pubkey {}",
-        username, xonly_pubkey
+        "Starting worker for channel ID {}, pubkey {}",
+        channel_id, xonly_pubkey
     );
 
     {
@@ -243,13 +244,19 @@ pub async fn handle_add(event: nostr_bot::Event, state: State) -> nostr_bot::Eve
         let tx = state_lock.error_sender.clone();
         let refresh_interval_secs = config.refresh_interval_secs;
         let state_clone = state.clone();
-        tokio::spawn(async move {
-            update_user(username, &keypair, sender, tx, refresh_interval_secs, state_clone).await;
-        });
+        if let Ok(channel_id_num) = channel_id.parse::<u64>() {
+            tokio::spawn(async move {
+                update_channel(channel_id_num, &keypair, sender, tx, refresh_interval_secs, state_clone).await;
+            });
+        } else {
+            warn!("Failed to parse channel_id to u64: {}", channel_id);
+        }
     }
+    
 
-    get_handle_response(event, &xonly_pubkey.to_string())
+    get_channel_response(event, &xonly_pubkey.to_string())
 }
+
 
 
 pub async fn uptime(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
@@ -263,7 +270,7 @@ pub async fn uptime(event: nostr_bot::Event, state: State) -> nostr_bot::EventNo
     )
 }
 
-fn get_handle_response(event: nostr_bot::Event, new_bot_pubkey: &str) -> nostr_bot::EventNonSigned {
+fn get_channel_response(event: nostr_bot::Event, new_bot_pubkey: &str) -> nostr_bot::EventNonSigned {
     let mut all_tags = nostr_bot::tags_for_reply(event);
     all_tags.push(vec!["p".to_string(), new_bot_pubkey.to_string()]);
     let last_tag_position = all_tags.len() - 1;
@@ -280,117 +287,121 @@ fn get_handle_response(event: nostr_bot::Event, new_bot_pubkey: &str) -> nostr_b
 }
 
 pub async fn start_existing(state: State) {
-    let db;
-    let error_sender;
-    let config_refresh_interval_secs;
-    let sender;
-    {
-        let state_lock = state.lock().await;
-        db = state_lock.db.lock().unwrap().clone();
-        error_sender = state_lock.error_sender.clone();
-        config_refresh_interval_secs = state_lock.config.refresh_interval_secs;
-        sender = state_lock.sender.clone();
-    }
+    let state_lock = state.lock().await;
+    let db = state_lock.db.lock().unwrap();
+    let error_sender = state_lock.error_sender.clone();
+    let config_refresh_interval_secs = state_lock.config.refresh_interval_secs;
+    let sender = state_lock.sender.clone();
 
-    for (username, keypair) in db.get_follows() {
-        info!("Starting worker for username {}", username);
-        
+    for (channel_id, keypair) in db.get_follows() {
+        info!("Starting worker for channel_id {}", channel_id);
+
         let refresh = config_refresh_interval_secs;
         let sender_clone = sender.clone();
         let error_sender_clone = error_sender.clone();
         let state_clone = state.clone();
-        tokio::spawn(async move {
-            update_user(username, &keypair, sender_clone, error_sender_clone, refresh, state_clone).await;
-        });
+        
+        if let Ok(channel_id_num) = channel_id.parse::<u64>() {
+            tokio::spawn(async move {
+                update_channel(channel_id_num, &keypair, sender_clone, error_sender_clone, refresh, state_clone).await;
+            });
+        } else {
+            warn!("Failed to parse channel_id to u64: {}", channel_id);
+        }
     }
 
-    info!("Done starting tasks for followed accounts.");
+    info!("Done starting tasks for followed channels.");
 }
+
+
 
 #[allow(dead_code)]
-async fn fake_worker(username: String, refresh_interval_secs: u64) {
+async fn fake_worker(channel_id: String, refresh_interval_secs: u64) {
     loop {
         debug!(
-            "Fake worker for user {}  is going to sleep for {} s",
-            username, refresh_interval_secs
+            "Fake worker for channel {}  is going to sleep for {} s",
+            channel_id, refresh_interval_secs
         );
         tokio::time::sleep(std::time::Duration::from_secs(refresh_interval_secs)).await;
-        debug!("Faking the work for user {}", username);
+        debug!("Faking the work for channel {}", channel_id);
     }
 }
 
-pub async fn update_user(
-    username: String,
+pub async fn update_channel(
+    channel_id: u64, // Change from username: String to channel_id: u64
     keypair: &secp256k1::KeyPair,
     sender: nostr_bot::Sender,
     tx: ErrorSender,
     refresh_interval_secs: u64,
     state: Arc<Mutex<DostrState>>,
 ) {
-    // fake_worker(username, refresh_interval_secs).await;
-    // return;
     let state_lock = state.lock().await;
-    let discord_context = &state_lock.discord_context;
+    let discord_context_option = state_lock.discord_context.lock().await.clone();
 
-    let pic_url = discord::get_pic_url(discord_context.clone(), &username).await.unwrap_or_default();
-    let event = nostr_bot::Event::new(
-        keypair,
-        utils::unix_timestamp(),
-        0,
-        vec![],
-        format!(
-            r#"{{"name":"dostr_{}","about":"Messages forwarded from https://discord.com/users/{} by [dostr](https://github.com/MiningSC/dostr) bot.","picture":"{}"}}"#,
-            username, username, pic_url
-        ),
-    );
-
-    sender.lock().await.send(event).await;
-
-    let mut since: chrono::DateTime<chrono::offset::Local> = std::time::SystemTime::now().into();
-
-    loop {
-        debug!(
-            "Worker for @{} is going to sleep for {} s",
-            username, refresh_interval_secs
+    if let Some(discord_context) = discord_context_option {
+        let discord_context = Arc::new(discord_context);
+        let event = nostr_bot::Event::new(
+            keypair,
+            utils::unix_timestamp(),
+            0,
+            vec![],
+            format!(
+                r#"{{"name":"dostr_{}","about":"Messages forwarded from https://discord.com/channels/{} by [dostr](https://github.com/MiningSC/dostr) bot."}}"#,
+                channel_id, channel_id
+            ),
         );
-        tokio::time::sleep(std::time::Duration::from_secs(refresh_interval_secs)).await;
 
-        let until = std::time::SystemTime::now().into();
-        let new_messages = discord::get_new_messages(discord_context, &username, since, until).await;
+        sender.lock().await.send(event).await;
 
-        match new_messages {
-            Ok(new_messages) => {
-                // --since seems to be inclusive and --until exclusive so this should be fine
-                since = until;
+        let mut since: chrono::DateTime<chrono::offset::Local> = std::time::SystemTime::now().into();
 
-                // twint returns newest messages first, reverse the Vec here so that messages are send to relays
-                // in order they were published. Still the created_at field can easily be the same so in the
-                // end it depends on how the relays handle it
-                for message in new_messages.iter().rev() {
-                    sender
-                        .lock()
-                        .await
-                        .send(discord::get_discord_event(message).sign(keypair))
-                        .await;
+        loop {
+            debug!(
+                "Worker for channel {} is going to sleep for {} s",
+                channel_id, refresh_interval_secs
+            );
+            tokio::time::sleep(std::time::Duration::from_secs(refresh_interval_secs)).await;
+
+            let until = std::time::SystemTime::now().into();
+            let new_messages = discord::get_new_messages(discord_context.clone(), ChannelId::from(channel_id), since, until).await;
+
+            match new_messages {
+                Ok(new_messages) => {
+                    since = until;
+
+                    for message in new_messages.iter().rev() {
+                        let event_non_signed = discord::get_discord_event(&message, message.get_message()).await;
+                        let signed_event = event_non_signed.sign(keypair);
+                        sender
+                            .lock()
+                            .await
+                            .send(signed_event)
+                            .await;
+                    }
+                    
+                    
+                    
+
+                    tx.send(ConnectionMessage {
+                        status: ConnectionStatus::Success,
+                        timestamp: std::time::SystemTime::now(),
+                    })
+                    .await
+                    .unwrap();
                 }
-
-                tx.send(ConnectionMessage {
-                    status: ConnectionStatus::Success,
-                    timestamp: std::time::SystemTime::now(),
-                })
-                .await
-                .unwrap();
-            }
-            Err(e) => {
-                tx.send(ConnectionMessage {
-                    status: ConnectionStatus::Failed,
-                    timestamp: std::time::SystemTime::now(),
-                })
-                .await
-                .unwrap();
-                warn!("{}", e);
+                Err(e) => {
+                    tx.send(ConnectionMessage {
+                        status: ConnectionStatus::Failed,
+                        timestamp: std::time::SystemTime::now(),
+                    })
+                    .await
+                    .unwrap();
+                    warn!("{}", e);
+                }
             }
         }
-        // break;
+    } else {
+        // Handle case where the Option is None
     }
 }
+
