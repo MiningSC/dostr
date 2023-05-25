@@ -238,6 +238,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "dostr"
+version = "0.4.0"
+dependencies = [
+ "async-process",
+ "chrono",
+ "compound_duration",
+ "env_logger",
+ "futures-util",
+ "json",
+ "linkify",
+ "log",
+ "nostr-bot",
+ "rand",
+ "reqwest",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-socks",
+ "tokio-tungstenite",
+ "tungstenite",
+ "url",
+]
+
+[[package]]
 name = "either"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1227,31 +1252,6 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "tostr"
-version = "0.4.0"
-dependencies = [
- "async-process",
- "chrono",
- "compound_duration",
- "env_logger",
- "futures-util",
- "json",
- "linkify",
- "log",
- "nostr-bot",
- "rand",
- "reqwest",
- "secp256k1",
- "serde",
- "serde_json",
- "tokio",
- "tokio-socks",
- "tokio-tungstenite",
- "tungstenite",
- "url",
 ]
 
 [[package]]

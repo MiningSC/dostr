@@ -22,7 +22,7 @@ pub struct ConnectionMessage {
     timestamp: std::time::SystemTime,
 }
 
-pub struct TostrState {
+pub struct DostrState {
     pub config: utils::Config,
     pub db: simpledb::Database,
     pub sender: nostr_bot::Sender,
@@ -33,7 +33,7 @@ pub struct TostrState {
     pub started_timestamp: u64,
 }
 
-pub type State = nostr_bot::State<TostrState>;
+pub type State = nostr_bot::State<DostrState>;
 
 pub async fn error_listener(
     mut rx: Receiver,
@@ -310,7 +310,7 @@ pub async fn update_user(
         0,
         vec![],
         format!(
-            r#"{{"name":"tostr_{}","about":"Tweets forwarded from https://twitter.com/{} by [tostr](https://github.com/slaninas/tostr) bot.","picture":"{}"}}"#,
+            r#"{{"name":"dostr_{}","about":"Tweets forwarded from https://twitter.com/{} by [dostr](https://github.com/MiningSC/dostr) bot.","picture":"{}"}}"#,
             username, username, pic_url
         ),
     );

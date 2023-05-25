@@ -10,7 +10,7 @@ Powered by [nostr-bot](https://github.com/slaninas/nostr-bot.git) and Discord's 
 
 ## How to run using Docker
 ```
-git clone https://github.com/slaninas/tostr/ && cd tostr
+git clone https://github.com/MiningSC/dostr/ && cd dostr
 # Now add secret (hex private key) to config file, tune config if you wish to
 ./build_and_run.sh --clearnet|tor
 ```

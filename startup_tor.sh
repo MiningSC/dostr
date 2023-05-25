@@ -19,4 +19,4 @@ ip6tables -P OUTPUT DROP
 service tor start
 service tor status
 
-cd /app && unbuffer ./target/release/tostr --tor | tee -a data/log
+cd /app && unbuffer ./target/release/dostr --tor | tee -a data/log
