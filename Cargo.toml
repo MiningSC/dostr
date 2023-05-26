@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 nostr-bot = "0.2"
-serenity = {version = "=0.10.9", default-features = false, features = ["client", "rustls_backend"]}
+serenity = {version = "=0.10.9", default-features = false, features = ["client", "rustls_backend", "builder", "utils", "gateway", "model" ]}
 
 async-process = "1.4.0"
 chrono = "0.4.19"
