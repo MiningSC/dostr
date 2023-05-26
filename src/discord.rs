@@ -94,13 +94,10 @@ pub async fn get_new_messages(
 }
 
 pub async fn get_discord_event(discord_message: &DiscordMessage) -> nostr_bot::EventNonSigned {
-    
-    let formatted = format!("{} {}", discord_message.timestamp, discord_message.message);
-    
-        nostr_bot::EventNonSigned {
-            created_at: utils::unix_timestamp(),
-            tags: vec![],
-            kind: 1,
-            content: formatted,
-        }
+    nostr_bot::EventNonSigned {
+        created_at: utils::unix_timestamp(),
+        tags: vec![],
+        kind: 1,
+        content: discord_message.message.clone(),
+    }
 }
