@@ -94,6 +94,10 @@ impl SimpleDatabase {
     pub fn is_channel_followed(&self, channel_id: &str) -> bool {
         self.follows.contains_key(channel_id)
     }
+
+    pub fn get_secret_for_channel(&self, channel_id: &str) -> Option<String> {
+        self.follows.get(channel_id).map(|s| s.to_string())
+    }
 }
 
 pub fn get_channel_keypair(channel_id: &str, db: Database) -> secp256k1::KeyPair {

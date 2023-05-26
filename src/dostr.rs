@@ -1,4 +1,4 @@
-use log::{debug, info, warn};
+use log::{error, debug, info, warn};
 use std::fmt::Write;
 use rand::Rng;
 use crate::simpledb;
@@ -294,7 +294,7 @@ pub async fn start_existing(state: State) {
     let sender = state_lock.sender.clone();
 
     for (channel_id, keypair) in db.get_follows() {
-        info!("Starting worker for channel_id {}", channel_id);
+        println!("Starting worker for channel_id {}", channel_id);
 
         let refresh = config_refresh_interval_secs;
         let sender_clone = sender.clone();
@@ -328,7 +328,7 @@ async fn fake_worker(channel_id: String, refresh_interval_secs: u64) {
 }
 
 pub async fn update_channel(
-    channel_id: u64, // Change from username: String to channel_id: u64
+    channel_id: u64,
     keypair: &secp256k1::KeyPair,
     sender: nostr_bot::Sender,
     tx: ErrorSender,
@@ -378,9 +378,6 @@ pub async fn update_channel(
                             .send(signed_event)
                             .await;
                     }
-                    
-                    
-                    
 
                     tx.send(ConnectionMessage {
                         status: ConnectionStatus::Success,
@@ -396,12 +393,13 @@ pub async fn update_channel(
                     })
                     .await
                     .unwrap();
-                    warn!("{}", e);
+
+                    error!("Failed to get new messages for channel {}: {}", channel_id, e);
                 }
             }
         }
     } else {
-        // Handle case where the Option is None
+        error!("Failed to update channel {}: Discord context is not available.", channel_id);
     }
 }
 

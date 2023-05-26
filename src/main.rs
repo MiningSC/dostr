@@ -54,7 +54,7 @@ async fn main() {
         config: config.clone(),
         sender: sender.clone(),
         db: std::sync::Arc::new(std::sync::Mutex::new(simpledb::SimpleDatabase::from_file(
-            "data/users".to_string(),
+            "data/channels".to_string(),
         ))),
         error_sender: tx.clone(),
         started_timestamp: nostr_bot::unix_timestamp(),

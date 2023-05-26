@@ -1,6 +1,5 @@
 use crate::utils;
 use crate::simpledb::SimpleDatabase;
-//use serenity::model::channel::GuildChannel;
 use serenity::{
     async_trait,
     model::{channel::Message, gateway::Ready, id::ChannelId},
@@ -28,18 +27,22 @@ pub struct Handler {
 #[async_trait]
 impl EventHandler for Handler {
     async fn message(&self, _ctx: Context, msg: Message) {
-        // Check if the channel is followed
+        println!("Entered message handler for message with ID: {}", msg.id);
         let follows = self.db_client.lock().await.get_follows();
-        if !follows.contains_key(&msg.channel_id.to_string()) {
-            return;
+        println!("Got follows: {:?}", follows);
+
+        if follows.contains_key(&msg.channel_id.to_string()) {
+            println!("Channel is followed, processing message");
+            let discord_message = DiscordMessage {
+                timestamp: msg.timestamp.timestamp() as u64,
+                message: msg.content.clone(),
+            };
+
+            println!("Discord message content 1:  {}", discord_message.message);
+            get_discord_event(&discord_message).await;
+        } else {
+            println!("Channel is not followed, exiting handler");
         }
-
-        let discord_message = DiscordMessage {
-            timestamp: msg.timestamp.timestamp() as u64,
-            message: msg.content.clone(),
-        };
-
-        get_discord_event(&discord_message).await;
     }
 
     async fn ready(&self, context: Context, ready: Ready) {
@@ -49,14 +52,13 @@ impl EventHandler for Handler {
     }
 }
 
-
-
 pub async fn channel_exists(channel_id: &ChannelId, ctx: Arc<Context>) -> bool {
     match channel_id.to_channel(&(*ctx)).await {
         Ok(_) => true,
         Err(_) => false,
     }
 }
+
 #[allow(dead_code)]
 pub async fn get_channel_name(channel_id: &ChannelId, ctx: Arc<Context>) -> Result<String, Box<dyn std::error::Error>> {
     let channel = channel_id.to_channel(&(*ctx)).await?;
@@ -94,13 +96,12 @@ pub async fn get_new_messages(
 }
 
 pub async fn get_discord_event(discord_message: &DiscordMessage) -> nostr_bot::EventNonSigned {
-    // Print the message content to the console
-    println!("Discord message content: {:?}", discord_message.message);
+    println!("Discord message content 0: {:?}", discord_message.message);
 
-    nostr_bot::EventNonSigned {
+    return nostr_bot::EventNonSigned {
         created_at: utils::unix_timestamp(),
         tags: vec![],
         kind: 1,
         content: discord_message.message.clone(),
-    }
+    };
 }
