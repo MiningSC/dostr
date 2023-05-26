@@ -15,5 +15,5 @@ fi
 
 echo $NETWORK
 
-docker build --build-arg NETWORK=$NETWORK -t tostr . && \
-	docker run --rm -ti --name=tostr -v$PWD/data:/app/data:rw $ADDITIONAL_ARGS tostr
+docker build --build-arg NETWORK=$NETWORK -t dostr . && \
+	docker run --rm -ti --name=dostr -v$PWD/data:/app/data:rw $ADDITIONAL_ARGS dostr
