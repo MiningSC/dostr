@@ -11,7 +11,7 @@ use serenity::Client;
 use tokio::sync::Mutex;
 use std::sync::Arc;
 use serenity::prelude::Context;
-use std::env;
+//use std::env;
 use simpledb::SimpleDatabase;
 
 #[tokio::main]
@@ -33,7 +33,7 @@ async fn main() {
 
     // Discord bot setup and start.
     // Replace "DISCORD_TOKEN" with your actual Discord bot token
-    let discord_token = env::var(&config.apik).expect("Expected a Discord token in the environment");
+    let discord_token = &config.apik;
 
     let mut discord_client = Client::builder(&discord_token)
         .event_handler(Handler { 
