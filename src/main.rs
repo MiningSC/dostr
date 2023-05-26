@@ -27,9 +27,13 @@ async fn main() {
         std::process::exit(1);
     }
 
+    let config_path = std::path::PathBuf::from("config");
+    let config = utils::parse_config(&config_path);
+    debug!("{:?}", config);
+
     // Discord bot setup and start.
     // Replace "DISCORD_TOKEN" with your actual Discord bot token
-    let discord_token = env::var("DISCORD_TOKEN").expect("Expected a Discord token in the environment");
+    let discord_token = env::var(&config.apik).expect("Expected a Discord token in the environment");
 
     let mut discord_client = Client::builder(&discord_token)
         .event_handler(Handler { 
@@ -41,10 +45,6 @@ async fn main() {
 
 
     let discord_future = discord_client.start();
-
-    let config_path = std::path::PathBuf::from("config");
-    let config = utils::parse_config(&config_path);
-    debug!("{:?}", config);
 
     let keypair = nostr_bot::keypair_from_secret(&config.secret);
     let sender = nostr_bot::new_sender();
