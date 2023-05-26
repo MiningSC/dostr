@@ -94,6 +94,9 @@ pub async fn get_new_messages(
 }
 
 pub async fn get_discord_event(discord_message: &DiscordMessage) -> nostr_bot::EventNonSigned {
+    // Print the message content to the console
+    println!("Discord message content: {:?}", discord_message.message);
+
     nostr_bot::EventNonSigned {
         created_at: utils::unix_timestamp(),
         tags: vec![],
