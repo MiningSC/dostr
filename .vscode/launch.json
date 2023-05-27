@@ -10,13 +10,11 @@
             "name": "Debug executable 'dostr'",
             "cargo": {
                 "args": [
-                    "build",
-                    "--bin=dostr",
-                    "--package=dostr"
+                    "run"
+                    //"-- --clearnet"
                 ],
                 "filter": {
-                    "name": "dostr",
-                    "kind": "bin"
+                    
                 }
             },
             "args": [],

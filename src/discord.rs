@@ -38,7 +38,7 @@ impl EventHandler for Handler {
                 message: msg.content.clone(),
             };
 
-            println!("Discord message content 1:  {}", discord_message.message);
+            println!("message_handler:  {}", discord_message.message);
             get_discord_event(&discord_message).await;
         } else {
             println!("Channel is not followed, exiting handler");
@@ -75,10 +75,13 @@ pub async fn get_new_messages(
     since: chrono::DateTime<chrono::offset::Local>,
     until: chrono::DateTime<chrono::offset::Local>,
 ) -> Result<Vec<DiscordMessage>, String> {
-    let messages = channel_id.messages(&ctx, |retriever| retriever.limit(100)).await;
+    println!("Attempting to get new messages for channel {}", channel_id.0);
 
+    let messages = channel_id.messages(&ctx, |retriever| retriever.limit(100)).await;
     match messages {
         Ok(retrieved_messages) => {
+            println!("Successfully retrieved {} messages from channel {}", retrieved_messages.len(), channel_id.0);
+
             let mut new_messages = vec![];
             for message in retrieved_messages {
                 let message_timestamp = message.timestamp.timestamp();
@@ -89,14 +92,21 @@ pub async fn get_new_messages(
                     });
                 }
             }
+
+            println!("Found {} new messages from channel {} between {} and {}", new_messages.len(), channel_id.0, since, until);
+
             Ok(new_messages)
         }
-        Err(why) => Err(format!("Error getting messages: {:?}", why)),
+        Err(why) => {
+            println!("Error getting messages from channel {}: {:?}", channel_id.0, why);
+            Err(format!("Error getting messages: {:?}", why))
+        },
     }
 }
 
+
 pub async fn get_discord_event(discord_message: &DiscordMessage) -> nostr_bot::EventNonSigned {
-    println!("Discord message content 0: {:?}", discord_message.message);
+    println!("get_discord_event: {:?}", discord_message.message);
 
     return nostr_bot::EventNonSigned {
         created_at: utils::unix_timestamp(),

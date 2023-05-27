@@ -118,6 +118,7 @@ pub async fn channel_relays(
 }
 
 pub async fn channel_list(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
+    println!("Channel_list function starting");
     let follows = state.lock().await.db.lock().unwrap().get_follows();
     let mut channel_ids = follows.keys().collect::<Vec<_>>();
     channel_ids.sort();
@@ -145,6 +146,7 @@ pub async fn channel_list(event: nostr_bot::Event, state: State) -> nostr_bot::E
 
 
 pub async fn channel_random(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
+    println!("Channel_random function starting");
     let follows = state.lock().await.db.lock().unwrap().get_follows();
 
     if follows.is_empty() {
@@ -180,6 +182,7 @@ pub async fn channel_random(event: nostr_bot::Event, state: State) -> nostr_bot:
 
 
 pub async fn channel_add(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
+    println!("Channel_add function starting");
     let words = event.content.split_whitespace().collect::<Vec<_>>();
     if words.len() < 2 {
         debug!("Invalid !add command >{}< (missing channel ID).", event.content);
@@ -260,6 +263,7 @@ pub async fn channel_add(event: nostr_bot::Event, state: State) -> nostr_bot::Ev
 
 
 pub async fn uptime(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
+    println!("Uptime function starting");
     let uptime_seconds = nostr_bot::unix_timestamp() - state.lock().await.started_timestamp;
     nostr_bot::get_reply(
         event,
@@ -271,6 +275,7 @@ pub async fn uptime(event: nostr_bot::Event, state: State) -> nostr_bot::EventNo
 }
 
 fn get_channel_response(event: nostr_bot::Event, new_bot_pubkey: &str) -> nostr_bot::EventNonSigned {
+    println!("get_channel_response function starting");
     let mut all_tags = nostr_bot::tags_for_reply(event);
     all_tags.push(vec!["p".to_string(), new_bot_pubkey.to_string()]);
     let last_tag_position = all_tags.len() - 1;
@@ -287,6 +292,7 @@ fn get_channel_response(event: nostr_bot::Event, new_bot_pubkey: &str) -> nostr_
 }
 
 pub async fn start_existing(state: State) {
+    println!("start_existing function starting");
     let state_lock = state.lock().await;
     let db = state_lock.db.lock().unwrap();
     let error_sender = state_lock.error_sender.clone();
@@ -303,7 +309,9 @@ pub async fn start_existing(state: State) {
         
         if let Ok(channel_id_num) = channel_id.parse::<u64>() {
             tokio::spawn(async move {
+                println!("Worker for channel ID: {}", channel_id_num);
                 update_channel(channel_id_num, &keypair, sender_clone, error_sender_clone, refresh, state_clone).await;
+                
             });
         } else {
             warn!("Failed to parse channel_id to u64: {}", channel_id);
@@ -312,8 +320,6 @@ pub async fn start_existing(state: State) {
 
     info!("Done starting tasks for followed channels.");
 }
-
-
 
 #[allow(dead_code)]
 async fn fake_worker(channel_id: String, refresh_interval_secs: u64) {
@@ -335,10 +341,13 @@ pub async fn update_channel(
     refresh_interval_secs: u64,
     state: Arc<Mutex<DostrState>>,
 ) {
+    println!("update_channel function starting for channel {}", channel_id);
     let state_lock = state.lock().await;
     let discord_context_option = state_lock.discord_context.lock().await.clone();
 
     if let Some(discord_context) = discord_context_option {
+        println!("Got discord context for channel {}", channel_id);
+
         let discord_context = Arc::new(discord_context);
         let event = nostr_bot::Event::new(
             keypair,
@@ -351,34 +360,35 @@ pub async fn update_channel(
             ),
         );
 
-        sender.lock().await.send(event).await;
+        let mut sender_lock = sender.lock().await;
+        sender_lock.send(event).await;
 
         let mut since: chrono::DateTime<chrono::offset::Local> = std::time::SystemTime::now().into();
 
         loop {
-            debug!(
+            println!(
                 "Worker for channel {} is going to sleep for {} s",
                 channel_id, refresh_interval_secs
             );
             tokio::time::sleep(std::time::Duration::from_secs(refresh_interval_secs)).await;
 
             let until = std::time::SystemTime::now().into();
+            println!("Waking up and fetching new messages for channel {}", channel_id);
             let new_messages = discord::get_new_messages(discord_context.clone(), ChannelId::from(channel_id), since, until).await;
-
+            
             match new_messages {
                 Ok(new_messages) => {
+                    println!("Successfully fetched new messages for channel {}", channel_id);
                     since = until;
 
                     for message in new_messages.iter().rev() {
+                        println!("for_message_loop starting for channel {}", channel_id);
                         let event_non_signed = discord::get_discord_event(&message).await;
                         let signed_event = event_non_signed.sign(keypair);
-                        sender
-                            .lock()
-                            .await
-                            .send(signed_event)
-                            .await;
+                        sender_lock.send(signed_event).await;
                     }
 
+                    println!("Successfully processed all new messages for channel {}", channel_id);
                     tx.send(ConnectionMessage {
                         status: ConnectionStatus::Success,
                         timestamp: std::time::SystemTime::now(),
@@ -387,19 +397,20 @@ pub async fn update_channel(
                     .unwrap();
                 }
                 Err(e) => {
+                    println!("Failed to get new messages for channel {}", channel_id);
                     tx.send(ConnectionMessage {
                         status: ConnectionStatus::Failed,
                         timestamp: std::time::SystemTime::now(),
                     })
                     .await
                     .unwrap();
-
+                
                     error!("Failed to get new messages for channel {}: {}", channel_id, e);
                 }
             }
         }
     } else {
+        println!("Failed to update channel {}: Discord context is not available.", channel_id);
         error!("Failed to update channel {}: Discord context is not available.", channel_id);
     }
 }
-

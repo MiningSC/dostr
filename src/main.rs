@@ -81,7 +81,7 @@ async fn main() {
     let mut bot = nostr_bot::Bot::<State>::new(keypair, relays, state)
         .name(&config.name)
         .about(&config.about)
-        .picture(&config.picture_url)
+        .picture(&config.picture_url)  
         .intro_message(&config.hello_message)
         .command(
             nostr_bot::Command::new("!add", nostr_bot::wrap!(dostr::channel_add))
