@@ -1,10 +1,10 @@
 # Uses value=key syntax
 
 # Private key (hex) for the bot goes here
-secret=9819bda9d9bcc55a588a013273fde9c1231af595da8ffb786b4eb8ca5151ccb6
+secret=
 
 # API Key for the discord bot goes here
-apik=MTExMTA4OTEyNzk1NDMyMTQ1OA.G0Y4uV.u56GMBwJLrMOGeRM-Je43T3H3omspdCp5Nn_uQ
+apik=
 
 # Main bot profile info
 name=dostr_bot
