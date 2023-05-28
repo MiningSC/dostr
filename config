@@ -6,6 +6,9 @@ secret=
 # API Key for the discord bot goes here
 apik=
 
+# Bot Owner's PUBLIC KEY (npub) goes here
+bot_owner=
+
 # Main bot profile info
 name=dostr_bot
 about="Hi, I'm [dostr](https://github.com/MiningSC/dostr) bot. Reply to me with '!help' to see available commands."
@@ -25,6 +28,7 @@ max_follows=100
 # See list of available relays at https://nostr-registry.netlify.app/
 addrelay=wss://nostr.mining.sc
 addrelay=wss://nostr-pub.wellorder.net
+addrelay=wss://relay.wellorder.net
 addrelay=wss://relay.damus.io
 addrelay=wss://relay.nostr.info
 addrelay=wss://relay.snort.social

@@ -8,6 +8,7 @@ pub struct Config {
     pub hello_message: String,
     pub secret: String,
     pub apik: String,
+    pub bot_owner: String,
     pub refresh_interval_secs: u64,
     pub relays: Vec<String>,
     pub max_follows: usize,
@@ -22,6 +23,7 @@ impl std::fmt::Debug for Config {
             .field("hello_message", &self.hello_message)
             .field("secret", &"***")
             .field("apik", &"***")
+            .field("bot_owner", &"***")
             .field("refresh_interval_secs", &self.refresh_interval_secs)
             .field("relays", &self.relays)
             .field("max_follows", &self.max_follows)
@@ -45,6 +47,7 @@ pub fn parse_config(path: &std::path::Path) -> Config {
     let mut picture_url = String::from("");
     let mut secret = String::new();
     let mut apik = String::new();
+    let mut bot_owner = String::new();
     let mut hello_message = String::new();
     let mut refresh_interval_secs = 0;
     let mut relays = Vec::new();
@@ -65,6 +68,8 @@ pub fn parse_config(path: &std::path::Path) -> Config {
             secret = get_value(line);
         } else if line.starts_with("apik") {
             apik = get_value(line);
+        } else if line.starts_with("bot_owner") {
+            bot_owner = get_value(line);
         } else if line.starts_with("refresh_interval_secs") {
             refresh_interval_secs = get_value(line)
                 .parse::<u64>()
@@ -85,6 +90,7 @@ pub fn parse_config(path: &std::path::Path) -> Config {
     assert!(!picture_url.is_empty());
     assert!(!secret.is_empty());
     assert!(!apik.is_empty());
+    assert!(!bot_owner.is_empty());
     assert!(!hello_message.is_empty());
     assert!(refresh_interval_secs > 0);
     assert!(!relays.is_empty());
@@ -96,6 +102,7 @@ pub fn parse_config(path: &std::path::Path) -> Config {
         picture_url,
         secret,
         apik,
+        bot_owner,
         hello_message,
         refresh_interval_secs,
         relays,

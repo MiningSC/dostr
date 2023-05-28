@@ -246,7 +246,6 @@ pub async fn channel_add(event: nostr_bot::Event, state: State) -> nostr_bot::Ev
         let sender = state_lock.sender.clone();
         let tx = state_lock.error_sender.clone();
         let refresh_interval_secs = config.refresh_interval_secs;
-        
         let state_clone = state.clone();
        
         if let Ok(channel_id_num) = channel_id.parse::<u64>() {
@@ -341,6 +340,8 @@ pub async fn update_channel(
     if let Some(discord_context) = discord_context_option {
 
         let discord_context = Arc::new(discord_context);
+        let config = state.lock().await.config.clone();
+        let bot_owner = config.bot_owner;
 
         let event = nostr_bot::Event::new(
             keypair,
@@ -348,8 +349,8 @@ pub async fn update_channel(
             0,
             vec![],
             format!(
-                r#"{{"name":"{}","about":"Tweets forwarded to Nostr via Discord by [dostr](https://github.com/MiningSC/dostr) bot.  Unaffiliated.  DM: matt@mining.sc to request a twitter account be mirrored."}}"#,
-                channel_name
+                r#"{{"name":"{}","about":"Tweets cross-posted to Nostr via Discord by [dostr](https://github.com/MiningSC/dostr) bot.  Unaffiliated.  DM: @{} to request a twitter account be cross-posted."}}"#,
+                channel_name, bot_owner
             ),
         );
 

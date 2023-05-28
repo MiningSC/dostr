@@ -30,7 +30,10 @@ If you would like to cross-post tweets here is the process to follow:
 4. On the "Bot" page of the Discord Developer Portal, select the slider called "MESSAGE CONTENT INTENT".  
 4. On the "General" page, click "Reset Secret" and save your Discord Bot API key.
 5. Create and save a new Nostr private key for your main bot (you can use snort.social or any other Nostr key generating service).
-6. Add the Nostr private key and the Discord API key to the config file.
+6. Add the Nostr private key, the Discord API key and the bot owner's Public key (npub) to the config file.
 7. Run the program.  Use the !add command from a Nostr Client to have the bot follow the discord channels you created in the following format: "!add channel-id:channel-name".  To get the channel-id you must have Developer Mode turned on for your Discord client.  Once this is turned on right click on the channel and click "Copy Channel ID".
 8. The private keys for the bots are stored in the data/channels file.  If you would like to add pictures for your bots you can log into Nostr using these private keys and edit the bot profiles.
+
+## Known Issues
+-When restarting the bot, if you previously populated photos or other bot profile information as referenced in step 8 above, those manual edits will have to be redone. 
 
