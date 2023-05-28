@@ -13,7 +13,7 @@ Powered by [nostr-bot](https://github.com/slaninas/nostr-bot.git) and Discord's 
 ## How to run using Docker
 ```
 git clone https://github.com/MiningSC/dostr/ && cd dostr
-# Now add secret (hex private key) to config file, Discord API key, and bot owner's public key (npub) tune config if you wish to
+# Now add secret (hex private key), Discord API key, and bot owner's public key (npub) to config file. Tune config if you wish to.
 ./build_and_run.sh --clearnet|tor
 ```
 Now the bot should be running and waiting for mentions. Just reply to its message to interact, see [Commands](#Commands).
