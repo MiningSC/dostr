@@ -16,4 +16,4 @@ fi
 echo $NETWORK
 
 docker build --build-arg NETWORK=$NETWORK -t dostr . && \
-	docker run --rm -ti --name=dostr -v$PWD/data:/app/data:rw $ADDITIONAL_ARGS dostr
+	docker run --restart=unless-stopped -ti --name=dostr -v$PWD/data:/app/data:rw $ADDITIONAL_ARGS dostr
