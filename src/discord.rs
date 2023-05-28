@@ -7,6 +7,7 @@ use serenity::{
 };
 use std::sync::Arc;
 
+#[allow(dead_code)]
 pub struct DiscordMessage {
     timestamp: u64,
     message: String,
@@ -22,31 +23,31 @@ impl DiscordMessage {
 pub struct Handler {
     pub discord_context: Arc<Mutex<Option<Context>>>,
     pub db_client: Arc<Mutex<SimpleDatabase>>,
+    pub sender: nostr_bot::Sender,
+    pub keypair: secp256k1::KeyPair,
 }
 
 #[async_trait]
 impl EventHandler for Handler {
     async fn message(&self, _ctx: Context, msg: Message) {
-        println!("Entered message handler for message with ID: {}", msg.id);
         let follows = self.db_client.lock().await.get_follows();
-        println!("Got follows: {:?}", follows);
 
         if follows.contains_key(&msg.channel_id.to_string()) {
-            println!("Channel is followed, processing message");
             let discord_message = DiscordMessage {
                 timestamp: msg.timestamp.timestamp() as u64,
                 message: msg.content.clone(),
             };
 
-            println!("message_handler:  {}", discord_message.message);
-            get_discord_event(&discord_message).await;
+            let event_non_signed = get_discord_event(&discord_message).await;
+            let signed_event = event_non_signed.sign(&self.keypair); 
+            self.sender.lock().await.send(signed_event).await;
         } else {
-            println!("Channel is not followed, exiting handler");
+
         }
     }
+    
 
-    async fn ready(&self, context: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
+    async fn ready(&self, context: Context, _ready: Ready) {
         let mut discord_context = self.discord_context.lock().await;
         *discord_context = Some(context);
     }
@@ -75,12 +76,10 @@ pub async fn get_new_messages(
     since: chrono::DateTime<chrono::offset::Local>,
     until: chrono::DateTime<chrono::offset::Local>,
 ) -> Result<Vec<DiscordMessage>, String> {
-    println!("Attempting to get new messages for channel {}", channel_id.0);
 
-    let messages = channel_id.messages(&ctx, |retriever| retriever.limit(100)).await;
+    let messages = channel_id.messages(&ctx, |retriever| retriever.limit(10)).await;
     match messages {
         Ok(retrieved_messages) => {
-            println!("Successfully retrieved {} messages from channel {}", retrieved_messages.len(), channel_id.0);
 
             let mut new_messages = vec![];
             for message in retrieved_messages {
@@ -93,12 +92,9 @@ pub async fn get_new_messages(
                 }
             }
 
-            println!("Found {} new messages from channel {} between {} and {}", new_messages.len(), channel_id.0, since, until);
-
             Ok(new_messages)
         }
         Err(why) => {
-            println!("Error getting messages from channel {}: {:?}", channel_id.0, why);
             Err(format!("Error getting messages: {:?}", why))
         },
     }
@@ -106,12 +102,12 @@ pub async fn get_new_messages(
 
 
 pub async fn get_discord_event(discord_message: &DiscordMessage) -> nostr_bot::EventNonSigned {
-    println!("get_discord_event: {:?}", discord_message.message);
 
-    return nostr_bot::EventNonSigned {
+    nostr_bot::EventNonSigned {
         created_at: utils::unix_timestamp(),
         tags: vec![],
         kind: 1,
         content: discord_message.message.clone(),
-    };
+    }
 }
+

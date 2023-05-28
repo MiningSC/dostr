@@ -3,6 +3,8 @@ mod dostr;
 mod discord;
 mod utils;
 
+use env_logger::Builder;
+use log::LevelFilter;
 use log::debug;
 use nostr_bot::FunctorType;
 use dostr::State;
@@ -11,12 +13,13 @@ use serenity::Client;
 use tokio::sync::Mutex;
 use std::sync::Arc;
 use serenity::prelude::Context;
-//use std::env;
 use simpledb::SimpleDatabase;
 
 #[tokio::main]
 async fn main() {
-    nostr_bot::init_logger();
+    Builder::new()
+        .filter(None, LevelFilter::Warn) // Set the desired logging level here
+        .init();
 
     let discord_context: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
     let db_client = Arc::new(Mutex::new(SimpleDatabase::from_file("data/channels".to_string())));
@@ -32,16 +35,18 @@ async fn main() {
     debug!("{:?}", config);
 
     // Discord bot setup and start.
-    // Replace "DISCORD_TOKEN" with your actual Discord bot token
+
     let discord_token = &config.apik;
 
     let mut discord_client = Client::builder(&discord_token)
-        .event_handler(Handler { 
+        .event_handler(Handler {
             discord_context: Arc::clone(&discord_context),
             db_client: Arc::clone(&db_client),
-    })
-    .await
-    .expect("Err creating Discord client");
+            sender: nostr_bot::new_sender(),
+            keypair: nostr_bot::keypair_from_secret(&config.secret),
+        })
+        .await
+        .expect("Err creating Discord client");
 
 
     let discord_future = discord_client.start();
@@ -85,7 +90,7 @@ async fn main() {
         .intro_message(&config.hello_message)
         .command(
             nostr_bot::Command::new("!add", nostr_bot::wrap!(dostr::channel_add))
-                .description("Add new channel-id to be followed by the bot."),
+                .description("Add new channel-id to be followed by the bot. To include a name also use channelid:name"),
         )
         .command(
             nostr_bot::Command::new("!random", nostr_bot::wrap!(dostr::channel_random))
