@@ -17,7 +17,7 @@ git clone https://github.com/MiningSC/dostr/ && cd dostr
 ./build_and_run.sh --clearnet|tor
 ```
 Now the bot should be running and waiting for mentions. Just reply to its message to interact, see [Commands](#Commands).
-It relays only new tweets that were posted after you launched it.
+It relays only new messages that were posted after you launched it.
 
 ## Tor
 In case `--tor` is used connections to both relay and Twitter *should* be going through tor. But if you need full anonymity please **check yourself there are no leaks**.
