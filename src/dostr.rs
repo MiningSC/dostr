@@ -41,7 +41,7 @@ pub async fn error_listener(
 ) {
     // If the message of the same kind as last one was received in less than this, discard it to
     // prevent spamming
-    let discard_period = std::time::Duration::from_secs(3600);
+    let discard_period = std::time::Duration::from_secs(10);
 
     let mut last_accepted_message = ConnectionMessage {
         status: ConnectionStatus::Success,
@@ -50,7 +50,7 @@ pub async fn error_listener(
 
     while let Some(message) = rx.recv().await {
         let mut message_to_send = std::option::Option::<String>::None;
-
+        
         if message.status != last_accepted_message.status {
             match message.status {
                 ConnectionStatus::Success => {
@@ -62,6 +62,7 @@ pub async fn error_listener(
             }
 
             last_accepted_message = message;
+            
         } else {
             let duration_since_last_accepted = message
                 .timestamp
@@ -84,6 +85,7 @@ pub async fn error_listener(
                 last_accepted_message = message;
             }
         }
+     //   println!("Message to send: {:?}", message_to_send);
 
         if let Some(message_to_send) = message_to_send {
             let event = nostr_bot::EventNonSigned {
@@ -330,7 +332,7 @@ pub async fn update_channel(
     tx: ErrorSender,
     refresh_interval_secs: u64,
     state: Arc<Mutex<DostrState>>,
-    channel_name: String,
+    _channel_name: String,
 ) {
 
     let state_lock = state.lock().await;
@@ -340,21 +342,21 @@ pub async fn update_channel(
     if let Some(discord_context) = discord_context_option {
 
         let discord_context = Arc::new(discord_context);
-        let config = state.lock().await.config.clone();
-        let bot_owner = config.bot_owner;
+      //  let config = state.lock().await.config.clone();
+      //  let bot_owner = config.bot_owner;
 
-        let event = nostr_bot::Event::new(
-            keypair,
-            utils::unix_timestamp(),
-            0,
-            vec![],
-            format!(
-                r#"{{"name":"{}","about":"Tweets cross-posted to Nostr via Discord by [dostr](https://github.com/MiningSC/dostr) bot.  Unaffiliated.  DM: @{} to request a twitter account be cross-posted."}}"#,
-                channel_name, bot_owner
-            ),
-        );
+      //  let event = nostr_bot::Event::new(
+      //      keypair,
+      //      utils::unix_timestamp(),
+      //      0,
+      //      vec![],
+      //      format!(
+      //          r#"{{"name":"{}","about":"Tweets cross-posted to Nostr via Discord by [dostr](https://github.com/MiningSC/dostr) bot.  Unaffiliated.  DM: @{} to request a twitter account be cross-posted."}}"#,
+      //          channel_name, bot_owner
+      //      ),
+      //  );
 
-        sender.lock().await.send(event).await;
+      //  sender.lock().await.send(event).await;
 
         let mut since: chrono::DateTime<chrono::offset::Local> = std::time::SystemTime::now().into();
 

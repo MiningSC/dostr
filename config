@@ -6,8 +6,7 @@ secret=
 # API Key for the discord bot goes here
 apik=
 
-# Bot Owner's PUBLIC KEY (npub) goes here
-bot_owner=
+bot_owner=npub
 
 # Main bot profile info
 name=dostr_bot
@@ -30,7 +29,6 @@ addrelay=wss://nostr.mining.sc
 addrelay=wss://nostr-pub.wellorder.net
 addrelay=wss://relay.wellorder.net
 addrelay=wss://relay.damus.io
-addrelay=wss://relay.nostr.info
 addrelay=wss://relay.snort.social
 addrelay=wss://nostr.wine
 addrelay=wss://relay.nostr.band
