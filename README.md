@@ -35,5 +35,5 @@ If you would like to cross-post tweets here is the process to follow:
 8. The private keys for the bots are stored in the data/channels file.  If you would like to add pictures for your bots you can log into Nostr using these private keys and edit the bot profiles.
 
 ## Known Issues
--When restarting the bot, if you previously populated photos or other bot profile information as referenced in step 8 above, those manual edits had to be re-entered.  To avoid this, code in the dostr.rs file has been commented out.  You now will have to populate new account names about sections, pictures or NIP-5 manually using the private key, but when the bot is restarted it is not erased. 
+-When restarting the bot, if you previously populated photos or other bot profile information as referenced in step 8 above, those manual edits had to be re-entered.  To avoid this, the associated code in the dostr.rs file has been commented out.  You now will have to populate new account names, about sections, pictures or NIP-5 manually using the private key. When the bot is restarted it will not be erased.
 
