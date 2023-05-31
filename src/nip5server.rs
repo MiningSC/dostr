@@ -35,6 +35,6 @@ pub async fn start_server() {
 
     let routes = well_known.or(warp::fs::dir("./web"));
 
-    warp::serve(routes).run(([127, 0, 0, 1], 3032)).await;
+    warp::serve(routes).run(([127, 0, 0, 1], 3033)).await;
 }
 

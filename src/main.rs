@@ -18,11 +18,12 @@ use simpledb::SimpleDatabase;
 
 #[tokio::main]
 async fn main() {
+
     Builder::new()
         .filter(None, LevelFilter::Warn) // Set the desired logging level here
         .init();
 
-    nip5server::start_server().await;
+    let _server_handle = tokio::spawn(nip5server::start_server());
 
     let discord_context: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
     let db_client = Arc::new(Mutex::new(SimpleDatabase::from_file("data/channels".to_string())));
@@ -50,7 +51,6 @@ async fn main() {
         })
         .await
         .expect("Err creating Discord client");
-
 
     let discord_future = discord_client.start();
 

@@ -26,12 +26,12 @@ max_follows=100
 # Relays that will be used for listening and posting
 # See list of available relays at https://nostr-registry.netlify.app/
 addrelay=wss://nostr.mining.sc
-# addrelay=wss://nostr-pub.wellorder.net
-# addrelay=wss://relay.wellorder.net
-# addrelay=wss://relay.damus.io
-# addrelay=wss://relay.snort.social
-# addrelay=wss://nostr.wine
-# addrelay=wss://relay.nostr.band
-# addrelay=wss://nos.lol
+addrelay=wss://nostr-pub.wellorder.net
+addrelay=wss://relay.wellorder.net
+addrelay=wss://relay.damus.io
+addrelay=wss://relay.snort.social
+addrelay=wss://nostr.wine
+addrelay=wss://relay.nostr.band
+addrelay=wss://nos.lol
 
 

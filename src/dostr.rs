@@ -7,6 +7,11 @@ use crate::utils;
 use serenity::model::id::ChannelId;
 use tokio::sync::Mutex;
 use std::sync::Arc;
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::Write as IoWrite;
+use std::collections::HashMap;
+use serde::{Serialize, Deserialize};
 
 type Receiver = tokio::sync::mpsc::Receiver<ConnectionMessage>;
 type ErrorSender = tokio::sync::mpsc::Sender<ConnectionMessage>;
@@ -30,6 +35,11 @@ pub struct DostrState {
     pub error_sender: tokio::sync::mpsc::Sender<ConnectionMessage>,
     pub started_timestamp: u64,
     pub discord_context: std::sync::Arc<tokio::sync::Mutex<Option<serenity::prelude::Context>>>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct NameDirectory {
+    names: HashMap<String, String>,
 }
 
 pub type State = nostr_bot::State<DostrState>;
@@ -181,6 +191,7 @@ pub async fn channel_random(event: nostr_bot::Event, state: State) -> nostr_bot:
 
 
 pub async fn channel_add(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
+    
     let words = event.content.split_whitespace().collect::<Vec<_>>();
     if words.len() < 2 {
         debug!("Invalid !add command >{}< (missing channel ID).", event.content);
@@ -244,6 +255,16 @@ pub async fn channel_add(event: nostr_bot::Event, state: State) -> nostr_bot::Ev
         channel_id, xonly_pubkey
     );
 
+        // Convert the xonly_pubkey to a string for use in the JSON file.
+    let public_key_string = format!("{}", xonly_pubkey); 
+
+        //New: Update the JSON file
+    let result = update_json_file(channel_name.clone(), public_key_string);
+    if let Err(e) = result {
+        error!("Failed to update JSON file: {:?}", e);
+        // you could return an error here or decide how to handle it
+    }
+
     {
         let sender = state_lock.sender.clone();
         let tx = state_lock.error_sender.clone();
@@ -258,6 +279,30 @@ pub async fn channel_add(event: nostr_bot::Event, state: State) -> nostr_bot::Ev
     }
 
     get_channel_response(event, &xonly_pubkey.to_string())
+}
+
+fn update_json_file(channel_name: String, public_key: String) -> std::io::Result<()> {
+    // Load the JSON file
+    let mut file = File::open("web/.well-known/nostr.json")?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+
+    // Parse the JSON data
+    let mut directory: NameDirectory = serde_json::from_str(&contents)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+    // Add new channel_name and public key to the directory
+    directory.names.insert(channel_name, public_key);
+
+    // Convert the updated directory back to JSON
+    let updated_json = serde_json::to_string_pretty(&directory)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+    // Write the updated JSON back to the file
+    let mut file = File::create("web/.well-known/nostr.json")?;
+    file.write_all(updated_json.as_bytes())?;
+
+    Ok(())
 }
 
 pub async fn uptime(event: nostr_bot::Event, state: State) -> nostr_bot::EventNonSigned {
