@@ -2,6 +2,7 @@ mod simpledb;
 mod dostr;
 mod discord;
 mod utils;
+mod nip5server;
 
 use env_logger::Builder;
 use log::LevelFilter;
@@ -20,6 +21,8 @@ async fn main() {
     Builder::new()
         .filter(None, LevelFilter::Warn) // Set the desired logging level here
         .init();
+
+    nip5server::start_server().await;
 
     let discord_context: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
     let db_client = Arc::new(Mutex::new(SimpleDatabase::from_file("data/channels".to_string())));

@@ -1,3 +1,4 @@
+use log::{debug, info};
 use crate::utils;
 use crate::simpledb::SimpleDatabase;
 use serenity::{
@@ -6,6 +7,7 @@ use serenity::{
     prelude::*,
 };
 use std::sync::Arc;
+use rss::Channel;
 
 #[allow(dead_code)]
 pub struct DiscordMessage {
@@ -110,4 +112,42 @@ pub async fn get_discord_event(discord_message: &DiscordMessage) -> nostr_bot::E
         content: discord_message.message.clone(),
     }
 }
+
+pub async fn get_pic_url(feed_url: &String) -> String {
+    let content = reqwest::get(feed_url).await.unwrap().bytes().await.unwrap();
+    let channel = Channel::read_from(&content[..]).unwrap();
+
+    // Get the image URL from the channel's image field
+    if let Some(image) = channel.image() {
+        let pic_url = image.url().to_string();
+
+        if pic_url.starts_with("http") {
+            debug!("Found pic url {} for {}", pic_url, feed_url);
+            return pic_url;
+        }
+    }
+
+    info!("Unable to find picture for {}", feed_url);
+    "".to_string()
+}
+
+pub async fn get_display_name(feed_url: &String) -> String {
+    let content = reqwest::get(feed_url).await.unwrap().bytes().await.unwrap();
+    let channel = Channel::read_from(&content[..]).unwrap();
+
+    // Get the channel title
+    let title = channel.title().to_string();
+
+    // Truncate the title at the '/ @' marker
+    let display_name = title.split("/ @").next().unwrap_or("");
+
+    if !display_name.is_empty() {
+        debug!("Found display name {} for {}", display_name, feed_url);
+        return display_name.to_string();
+    } else {
+        info!("Unable to find display name for {}", feed_url);
+        "".to_string()
+    }
+}
+
 
