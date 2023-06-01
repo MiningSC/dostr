@@ -18,7 +18,7 @@ git clone https://github.com/MiningSC/dostr/ && cd dostr
 ```
 There is also a Docker Compose file if you prefer to use that.
 
-Now the bot should be running and waiting for mentions. Just reply to its message to interact, see [Commands](#Commands).
+Now the bot should be running and waiting for mentions. Just reply to its message to interact.
 It relays only new messages that were posted after you launched it.
 
 ## Update (2023/06/01)
