@@ -27,9 +27,9 @@ Automatic NIP05 verification has been added as well as a folder for a static web
 I have begun integrating Nitter into the project.  The bots now automatically pull their Display Name and Profile Picture from a Nitter RSS feed.  It is important that you include the correct twitter handle (all lowercase, no spaces or @), when you tell the bot to follow a new account so that it can properly populate these items.  There is a variable in the .env file for your preferred Nitter instance.  The proper format to tell your bot to follow a discord channel is: "!add 1111088216607567974:twitterusername", where the numbers is the discord channel ID, followed by a colon with the twitter username after.  The twitter username should be a single word and not include the @.
 
 There are now 3 mounts or volumes you must attach to the docker instance.  
-  -One is for the file containing the followed channels, private keys and usernames (data/channels)
-  -The second is for the nostr.json NIP 5 verificaiton (web)
-  -The third is for the web server (webstatic)
+  1. The file containing the followed channels, private keys and usernames (data/channels)
+  2. Folder for the nostr.json NIP 5 verificaiton (web)
+  3. Web server (webstatic)
 
 ## Tor
 In case `--tor` is used connections to both relay and Twitter *should* be going through tor. But if you need full anonymity please **check yourself there are no leaks**.
