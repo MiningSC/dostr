@@ -379,7 +379,7 @@ pub async fn update_channel(
     state: Arc<Mutex<DostrState>>,
     channel_name: String,
 ) {
-
+    let config = utils::parse_config();
     let state_lock = state.lock().await;
     let discord_context_option = state_lock.discord_context.lock().await.clone();
     drop(state_lock); 
@@ -387,10 +387,7 @@ pub async fn update_channel(
     if let Some(discord_context) = discord_context_option {
 
         let discord_context = Arc::new(discord_context);
-        let config = state.lock().await.config.clone();
-        let _bot_owner = config.bot_owner;
-        
-        let rssfeed = format!("https://nitter.nostr.sc/{}/rss", channel_name);
+        let rssfeed = format!("https://{}/{}/rss", &config.nitter_instance, channel_name);
         let pfp = discord::get_pic_url(&rssfeed).await;
         let display_name = discord::get_display_name(&rssfeed).await;
 

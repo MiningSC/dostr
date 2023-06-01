@@ -1,4 +1,5 @@
 FROM rust:1.62-bullseye
+
 ARG CODENAME=bullseye
 
 # Prevent being stuck at timezone selection
@@ -22,11 +23,11 @@ RUN if [ "$NETWORK" = "clearnet" ]; then ln -s /startup_clearnet.sh /startup.sh;
 # TODO: Add non-root user and use it
 ENV RUST_LOG=debug
 
-COPY Cargo.toml /app/
-COPY src /app/src
+WORKDIR /app
+COPY Cargo.toml .
+COPY src ./src
 
-
-RUN cd app && cargo build --release
+RUN cargo build --release
 
 # Use unbuffer to preserve colors in terminal output while using tee
-CMD cd /app && unbuffer /startup.sh
+CMD unbuffer /startup.sh

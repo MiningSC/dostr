@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: black;
+            color: rgb(124, 58, 237);
+            font-family: system-ui, sans-serif;
+            font-size: 2.4rem;
+            text-transform: capitalize;
+        }
+    </style>
+    <script>
+        // Fetch the current URL
+        var currentURL = window.location.href;
+
+        // Extract the domain name from the URL
+        var domainName = new URL(currentURL).hostname;
+
+        // Capitalize the domain name
+        var capitalizedDomainName = domainName.charAt(0).toUpperCase() + domainName.slice(1);
+
+        // Set the capitalized domain name as the title of the HTML document
+        document.title = capitalizedDomainName;
+    </script>
+</head>
+<body>
+    <h1 id="domain-name">Loading...</h1>
+
+    <script>
+        // Set the domain name as the content of the <h1> element
+        document.getElementById("domain-name").textContent = domainName;
+    </script>
+</body>
+</html>

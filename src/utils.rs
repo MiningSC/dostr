@@ -1,4 +1,3 @@
-use log::warn;
 
 #[derive(Clone)]
 pub struct Config {
@@ -8,11 +7,13 @@ pub struct Config {
     pub hello_message: String,
     pub secret: String,
     pub apik: String,
-    pub bot_owner: String,
+    pub web_port: u16,
+    pub nitter_instance: String,
     pub refresh_interval_secs: u64,
     pub relays: Vec<String>,
     pub max_follows: usize,
 }
+
 
 impl std::fmt::Debug for Config {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -23,7 +24,8 @@ impl std::fmt::Debug for Config {
             .field("hello_message", &self.hello_message)
             .field("secret", &"***")
             .field("apik", &"***")
-            .field("bot_owner", &"***")
+            .field("web_port", &self.web_port)
+            .field("nitter_instance", &self.nitter_instance)
             .field("refresh_interval_secs", &self.refresh_interval_secs)
             .field("relays", &self.relays)
             .field("max_follows", &self.max_follows)
@@ -31,84 +33,49 @@ impl std::fmt::Debug for Config {
     }
 }
 
-pub fn parse_config(path: &std::path::Path) -> Config {
-    let get_value = |line: String| {
-        let mut value = line.split('=').collect::<Vec<_>>()[1].to_string();
-        if value.starts_with('"') && value.ends_with('"') {
-            value = value[1..value.len() - 1].to_string();
-        }
-        value
-    };
+pub fn parse_config() -> Config {
+    let name = std::env::var("NAME").unwrap_or_default();
+    let about = std::env::var("ABOUT").unwrap_or_default();
+    let picture_url = std::env::var("PICTURE_URL").unwrap_or_default();
+    let hello_message = std::env::var("HELLO_MESSAGE").unwrap_or_default();
+    let secret = std::env::var("SECRET").unwrap_or_default();
+    let apik = std::env::var("APIK").unwrap_or_default();
+    let web_port = std::env::var("WEB_PORT").unwrap_or_default().parse::<u16>().unwrap_or_default();
+    let nitter_instance = std::env::var("NITTER_INSTANCE").unwrap_or_default();
+    let refresh_interval_secs = std::env::var("REFRESH_INTERVAL_SECS").unwrap_or_default().parse::<u64>().unwrap_or_default();
+    let max_follows = std::env::var("MAX_FOLLOWS").unwrap_or_default().parse::<usize>().unwrap_or_default();
 
-    let content = std::fs::read_to_string(path).expect("Config reading failed.");
+    // Extract the relay urls from the environment variable and split it into a Vec<String>
+    let add_relay = std::env::var("ADD_RELAY").unwrap_or_default();
+    let relays: Vec<String> = add_relay.split(',').map(|s| s.to_string()).collect();
 
-    let mut name = String::from("");
-    let mut about = String::from("");
-    let mut picture_url = String::from("");
-    let mut secret = String::new();
-    let mut apik = String::new();
-    let mut bot_owner = String::new();
-    let mut hello_message = String::new();
-    let mut refresh_interval_secs = 0;
-    let mut relays = Vec::new();
-    let mut max_follows = 0;
-
-    for line in content.lines() {
-        let line = line.to_string();
-
-        if line.starts_with("name") {
-            name = get_value(line);
-        } else if line.starts_with("about") {
-            about = get_value(line);
-        } else if line.starts_with("picture_url") {
-            picture_url = get_value(line);
-        } else if line.starts_with("hello_message") {
-            hello_message = get_value(line);
-        } else if line.starts_with("secret") {
-            secret = get_value(line);
-        } else if line.starts_with("apik") {
-            apik = get_value(line);
-        } else if line.starts_with("bot_owner") {
-            bot_owner = get_value(line);
-        } else if line.starts_with("refresh_interval_secs") {
-            refresh_interval_secs = get_value(line)
-                .parse::<u64>()
-                .expect("Failed to parse the refresh interval.");
-        } else if line.starts_with("addrelay") {
-            relays.push(get_value(line));
-        } else if line.starts_with("max_follows") {
-            max_follows = get_value(line).parse::<usize>().expect("Can't parse value");
-        } else if line.starts_with('#') || line.is_empty() {
-            // Ignoring comments and blank lines
-        } else {
-            warn!("Unknown config line >{}<", line);
-        }
-    }
-
-    assert!(!name.is_empty());
-    assert!(!about.is_empty());
-    assert!(!picture_url.is_empty());
-    assert!(!secret.is_empty());
-    assert!(!apik.is_empty());
-    assert!(!bot_owner.is_empty());
-    assert!(!hello_message.is_empty());
-    assert!(refresh_interval_secs > 0);
-    assert!(!relays.is_empty());
-    assert!(max_follows > 0);
+    assert!(!name.is_empty(), "The NAME environment variable is not set.");
+    assert!(!about.is_empty(), "The ABOUT environment variable is not set.");
+    assert!(!picture_url.is_empty(), "The PICTURE_URL environment variable is not set.");
+    assert!(!hello_message.is_empty(), "The HELLO_MESSAGE environment variable is not set.");
+    assert!(!secret.is_empty(), "The SECRET environment variable is not set.");
+    assert!(!apik.is_empty(), "The APIK environment variable is not set.");
+    assert!(web_port > 0, "The WEB_PORT environment variable is not set or zero.");
+    assert!(!nitter_instance.is_empty(), "The NITTER_INSTANCE environment variable is not set.");
+    assert!(refresh_interval_secs > 0, "The REFRESH_INTERVAL_SECS environment variable is not set or zero.");
+    assert!(!relays.is_empty(), "The ADD_RELAY environment variable is not set.");
+    assert!(max_follows > 0, "The MAX_FOLLOWS environment variable is not set or zero.");
 
     Config {
         name,
         about,
         picture_url,
+        hello_message,
         secret,
         apik,
-        bot_owner,
-        hello_message,
+        web_port,
+        nitter_instance,
         refresh_interval_secs,
         relays,
         max_follows,
     }
 }
+
 
 pub fn unix_timestamp() -> u64 {
     std::time::SystemTime::now()

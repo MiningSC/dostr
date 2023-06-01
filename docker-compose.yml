@@ -1,0 +1,15 @@
+version: '3'
+services:
+  dostrnip5v1:
+    build:
+      context: .
+      args:
+        - NETWORK=clearnet # Default value, can be overridden in the environment
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT}:${WEB_PORT}"
+    env_file: .env
+    volumes:
+      - "./data:/app/data"
+      - "./web:/app/web"
+      - "./webstatic:/app/webstatic"

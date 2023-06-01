@@ -13,11 +13,14 @@ use discord::{Handler};
 use serenity::Client;
 use tokio::sync::Mutex;
 use std::sync::Arc;
+use std::env;
 use serenity::prelude::Context;
 use simpledb::SimpleDatabase;
+use dotenv::dotenv;
 
 #[tokio::main]
 async fn main() {
+    dotenv().ok();
 
     Builder::new()
         .filter(None, LevelFilter::Warn) // Set the desired logging level here
@@ -26,7 +29,10 @@ async fn main() {
     let _server_handle = tokio::spawn(nip5server::start_server());
 
     let discord_context: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
-    let db_client = Arc::new(Mutex::new(SimpleDatabase::from_file("/app/data/channels".to_string())));
+
+    let current_dir = env::current_dir().unwrap();
+    let db_file_path = current_dir.join("data/channels");
+    let db_client = Arc::new(Mutex::new(SimpleDatabase::from_file(db_file_path.to_string_lossy().to_string())));
 
     let args = std::env::args().collect::<Vec<String>>();
     if args.len() != 2 {
@@ -34,8 +40,8 @@ async fn main() {
         std::process::exit(1);
     }
 
-    let config_path = std::path::PathBuf::from("config");
-    let config = utils::parse_config(&config_path);
+    // Instead of reading a configuration file, create the config directly from environment variables
+    let config = utils::parse_config();
     debug!("{:?}", config);
 
     // Discord bot setup and start.
@@ -58,11 +64,14 @@ async fn main() {
     let sender = nostr_bot::new_sender();
 
     let (tx, rx) = tokio::sync::mpsc::channel::<dostr::ConnectionMessage>(64);
+
+    let current_dir = env::current_dir().unwrap();
+    let db_file_path = current_dir.join("data/channels");
     let state = nostr_bot::wrap_state(dostr::DostrState {
         config: config.clone(),
         sender: sender.clone(),
         db: std::sync::Arc::new(std::sync::Mutex::new(simpledb::SimpleDatabase::from_file(
-            "/app/data/channels".to_string(),
+            db_file_path.to_string_lossy().to_string(),
         ))),
         error_sender: tx.clone(),
         started_timestamp: nostr_bot::unix_timestamp(),
@@ -118,7 +127,7 @@ async fn main() {
 
     match args[1].as_str() {
         "--clearnet" => {}
-        "--tor" => bot = bot.use_socks5("127.0.0.1:9050"),
+        "--tor" => bot = bot.use_socks5("0.0.0.0:9050"),
         _ => panic!("Incorrect network settings"),
     }
 
