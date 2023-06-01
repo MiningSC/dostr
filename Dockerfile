@@ -16,7 +16,6 @@ RUN apt update && apt install -y tor deb.torproject.org-keyring
 
 ARG NETWORK
 
-COPY config /app/
 COPY startup_clearnet.sh startup_tor.sh /
 RUN if [ "$NETWORK" = "clearnet" ]; then ln -s /startup_clearnet.sh /startup.sh; elif [ "$NETWORK" = "tor" ]; then ln -s /startup_tor.sh /startup.sh; else exit 1; fi
 

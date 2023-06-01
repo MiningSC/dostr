@@ -1,15 +1,24 @@
 version: '3'
 services:
   dostrnip5v1:
-    build:
-      context: .
-      args:
-        - NETWORK=clearnet # Default value, can be overridden in the environment
+    image: miningsc/dostr:latest
     restart: unless-stopped
     ports:
       - "${WEB_PORT}:${WEB_PORT}"
-    env_file: .env
+    env_file: .env                         #portainer made me change this to stack.env and rename the .env file, your docker service may not
     volumes:
-      - "./data:/app/data"
-      - "./web:/app/web"
-      - "./webstatic:/app/webstatic"
+      - type: bind
+        source: /srv/dockerdata/dostr      #change this to your own folder
+        target: /app/data
+      - type: bind
+        source: /srv/dockerdata/nip5       #change this to your own folder
+        target: /app/web
+      - type: bind
+        source: /srv/dockerdata/webstatic  #change this to your own folder
+        target: /app/webstatic
+    networks:
+      - bridge
+
+networks:
+  bridge:
+    driver: bridge
