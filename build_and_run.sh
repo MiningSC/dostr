@@ -15,5 +15,5 @@ fi
 
 echo $NETWORK
 
-docker build --build-arg NETWORK=$NETWORK -t dostr . && \
-	docker run --restart=unless-stopped -ti --name=dostr -v$PWD/data:/app/data:rw $ADDITIONAL_ARGS dostr
+docker build --build-arg NETWORK=$NETWORK -t dostrnip5v1 . && \
+	docker run --restart=unless-stopped -p 3033:3033 -ti --name=dostrnip5v1 -v "$(pwd)/data:/app/data" -v "$(pwd)/web:/app/web" dostrnip5v1

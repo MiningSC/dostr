@@ -10,10 +10,8 @@ pub struct Entry {
     names: HashMap<String, String>,
 }
 
-// This function simulates loading data from JSON.
-// Replace with your actual loading function.
 async fn load_data() -> Result<Entry, Box<dyn std::error::Error + Send + Sync>> {
-    let data = fs::read_to_string("./web/.well-known/nostr.json").await?;
+    let data = fs::read_to_string("/app/web/.well-known/nostr.json").await?;
     let entries: Entry = serde_json::from_str(&data)?;
     Ok(entries)
 }
@@ -33,8 +31,8 @@ pub async fn start_server() {
             warp::reply::json(&response)
         });
 
-    let routes = well_known.or(warp::fs::dir("./web"));
+    let routes = well_known.or(warp::fs::dir("web"));
 
-    warp::serve(routes).run(([127, 0, 0, 1], 3033)).await;
+    warp::serve(routes).run(([0, 0, 0, 0], 3033)).await;
 }
 

@@ -26,7 +26,7 @@ async fn main() {
     let _server_handle = tokio::spawn(nip5server::start_server());
 
     let discord_context: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
-    let db_client = Arc::new(Mutex::new(SimpleDatabase::from_file("data/channels".to_string())));
+    let db_client = Arc::new(Mutex::new(SimpleDatabase::from_file("/app/data/channels".to_string())));
 
     let args = std::env::args().collect::<Vec<String>>();
     if args.len() != 2 {
@@ -62,7 +62,7 @@ async fn main() {
         config: config.clone(),
         sender: sender.clone(),
         db: std::sync::Arc::new(std::sync::Mutex::new(simpledb::SimpleDatabase::from_file(
-            "data/channels".to_string(),
+            "/app/data/channels".to_string(),
         ))),
         error_sender: tx.clone(),
         started_timestamp: nostr_bot::unix_timestamp(),
