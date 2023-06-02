@@ -17,3 +17,4 @@
 # data folder
 data/
 .env
+web/.well-known/nostr.json
