@@ -23,7 +23,7 @@ impl SimpleDatabase {
         let content = std::fs::read_to_string(path).expect("Failed opening database file");
 
         for line in content.lines() {
-            let split = line.split(':').collect::<Vec<_>>();
+            let split = line.split(',').collect::<Vec<_>>();
             if split.len() != 3 {
                 debug!("unable to parse line: >{:?}<, skipping", split);
                 continue;
@@ -63,7 +63,7 @@ impl SimpleDatabase {
             .open(self.file.clone())
             .unwrap();
 
-        writeln!(file, "{}:{}:{}", channel_id, seckey, name).unwrap();
+        writeln!(file, "{},{},{}", channel_id, seckey, name).unwrap();
         debug!("Wrote updated database to the file");
         Ok(())
     }

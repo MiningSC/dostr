@@ -1,6 +1,6 @@
 mod simpledb;
 mod dostr;
-mod discord;
+mod fetch;
 mod utils;
 mod nip5server;
 
@@ -9,7 +9,7 @@ use log::LevelFilter;
 use log::debug;
 use nostr_bot::FunctorType;
 use dostr::State;
-use discord::{Handler};
+use fetch::Handler;
 use serenity::Client;
 use tokio::sync::Mutex;
 use std::sync::Arc;
@@ -23,6 +23,7 @@ async fn main() {
     dotenv().ok();
 
     Builder::new()
+        .filter_module("tracing::span", LevelFilter::Off) // Exclude tracing::span logs
         .filter(None, LevelFilter::Warn) // Set the desired logging level here
         .init();
 
@@ -67,6 +68,7 @@ async fn main() {
 
     let current_dir = env::current_dir().unwrap();
     let db_file_path = current_dir.join("data/channels");
+    
     let state = nostr_bot::wrap_state(dostr::DostrState {
         config: config.clone(),
         sender: sender.clone(),
@@ -102,7 +104,7 @@ async fn main() {
         .intro_message(&config.hello_message)
         .command(
             nostr_bot::Command::new("!add", nostr_bot::wrap!(dostr::channel_add))
-                .description("Add new channel-id to be followed by the bot. To include a name also use channelid:name"),
+                .description("Add new channel-id to be followed by the bot. To include a name also use channelid:name")
         )
         .command(
             nostr_bot::Command::new("!random", nostr_bot::wrap!(dostr::channel_random))
@@ -136,5 +138,4 @@ async fn main() {
         _ = bot.run() => {}
         _ = discord_future => {}
     }
-
 }

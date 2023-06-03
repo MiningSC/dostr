@@ -18,3 +18,4 @@
 data/
 .env
 web/.well-known/nostr.json
+web/.well-known/nostr.json

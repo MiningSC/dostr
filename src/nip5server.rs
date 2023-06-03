@@ -1,11 +1,12 @@
 use crate::utils;
-
 use serde_json::json;
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::env;
 use warp::Filter;
 use tokio::fs;
 use serde::{Deserialize, Serialize};
+use warp::http::StatusCode;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Entry {
@@ -29,7 +30,11 @@ pub async fn start_server() {
             let mut response = HashMap::new();
             let names = data.names.get(&name).cloned().unwrap_or_else(|| "Not found".to_string());
             response.insert("names", json!({name: names}));
-            Ok::<_, warp::Rejection>(warp::reply::json(&response))
+            Ok::<_, warp::Rejection>(warp::reply::with_header(
+                warp::reply::json(&response),
+                "Access-Control-Allow-Origin",
+                "*",
+            ))
         });
 
     let current_dir = env::current_dir().expect("Failed to get current directory");
@@ -37,8 +42,37 @@ pub async fn start_server() {
     let static_files = warp::fs::dir(current_dir.join("webstatic"));
 
     let routes = well_known.or(static_files);
+
     let config = utils::parse_config();
     let port = config.web_port;
 
-    warp::serve(routes).run(([0, 0, 0, 0], port)).await;
+    warp::serve(routes.recover(handle_rejection)).run(([0, 0, 0, 0], port)).await;
+}
+
+async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, Infallible> {
+    let code;
+    let message;
+
+    if err.is_not_found() {
+        code = StatusCode::NOT_FOUND;
+        message = "Not Found";
+    } else if let Some(_) = err.find::<warp::filters::body::BodyDeserializeError>() {
+        code = StatusCode::BAD_REQUEST;
+        message = "Invalid Body";
+    } else if let Some(_) = err.find::<warp::reject::MethodNotAllowed>() {
+        code = StatusCode::METHOD_NOT_ALLOWED;
+        message = "Method Not Allowed";
+    } else {
+        eprintln!("unhandled rejection: {:?}", err);
+        code = StatusCode::INTERNAL_SERVER_ERROR;
+        message = "Internal Server Error";
+    }
+
+    let json = warp::reply::json(&{
+        let mut map = HashMap::new();
+        map.insert("error", message);
+        map
+    });
+
+    Ok(warp::reply::with_status(json, code))
 }

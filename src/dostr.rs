@@ -1,8 +1,8 @@
-use log::{error, debug, info, warn};
+use log::{error, debug, info};
 use std::fmt::Write;
 use rand::Rng;
 use crate::simpledb;
-use crate::discord;
+use crate::fetch;
 use crate::utils;
 use serenity::model::id::ChannelId;
 use tokio::sync::Mutex;
@@ -51,7 +51,7 @@ pub async fn error_listener(
 ) {
     // If the message of the same kind as last one was received in less than this, discard it to
     // prevent spamming
-    let discard_period = std::time::Duration::from_secs(10);
+    let discard_period = std::time::Duration::from_secs(360000);
 
     let mut last_accepted_message = ConnectionMessage {
         status: ConnectionStatus::Success,
@@ -199,12 +199,16 @@ pub async fn channel_add(event: nostr_bot::Event, state: State) -> nostr_bot::Ev
     }
 
     let data: Vec<String> = words[1]
-        .splitn(2, ':')
+        .splitn(2, ',')
         .map(String::from)
         .collect();
 
     let channel_id = data[0].to_string();
-    let channel_name = if data.len() > 1 { data[1..].join(":").trim().to_string() } else { channel_id.to_string() }; // if name is not provided, use the channel id as the name
+    let channel_name = if data.len() > 1 { 
+        data[1..].join(",").trim().to_string() 
+    } else { 
+        channel_id.to_string() 
+    }; // if name is not provided, use the channel id as the name
 
     let db = state.lock().await.db.clone();
     let config = state.lock().await.config.clone();
@@ -226,59 +230,93 @@ pub async fn channel_add(event: nostr_bot::Event, state: State) -> nostr_bot::Ev
 
     let state_lock = state.lock().await;
     let discord_context_option = state_lock.discord_context.lock().await.clone();
-    let channel_id_num = ChannelId(channel_id.parse::<u64>().expect("Failed to parse channel ID"));
-    // Check if the Context is present and pass it to the function
-    if let Some(discord_context) = discord_context_option {
-        if !discord::channel_exists(&channel_id_num, Arc::new(discord_context)).await {
-            return nostr_bot::get_reply(
-                event,
-                format!("Hi, I wasn't able to find channel ID {} on Discord :(.", channel_id),
-            );
-        }
-    } else {
-        return nostr_bot::get_reply(
-            event,
-            format!("Hi, there is no active Discord context. Please ensure that the bot is connected to Discord."),
-        );
-    }
-
+//    let channel_id_num = ChannelId(channel_id.parse::<u64>().expect("Failed to parse channel ID"));
     let keypair = utils::get_random_keypair();
 
     db.lock()
         .unwrap()
-        .insert(channel_id.clone(), keypair.display_secret().to_string(), channel_name.clone())
+        .insert( channel_id.clone(), keypair.display_secret().to_string(), channel_name.clone(),)
         .unwrap();
+
     let (xonly_pubkey, _) = keypair.x_only_public_key();
-    let channel_id = channel_id.to_string();
+ //   let channel_id = channel_id.to_string();
     info!(
         "Starting worker for channel ID {}, pubkey {}",
         channel_id, xonly_pubkey
     );
 
-        // Convert the xonly_pubkey to a string for use in the JSON file.
+    // Convert the xonly_pubkey to a string for use in the JSON file.
     let public_key_string = format!("{}", xonly_pubkey); 
 
-        //New: Update the JSON file
+    // Update the JSON file
     let result = update_json_file(channel_name.clone(), public_key_string);
     if let Err(e) = result {
         error!("Failed to update JSON file: {:?}", e);
         // you could return an error here or decide how to handle it
     }
 
-    {
-        let sender = state_lock.sender.clone();
-        let tx = state_lock.error_sender.clone();
-        let refresh_interval_secs = config.refresh_interval_secs;
-        let state_clone = state.clone();
-       
-        if let Ok(channel_id_num) = channel_id.parse::<u64>() {
+    let sender = state_lock.sender.clone();
+    let tx = state_lock.error_sender.clone();
+    let refresh_interval_secs = config.refresh_interval_secs;
+    let state_clone = state.clone();
+
+    // Check if channel_id is a number (Discord) or a URL (RSS feed)
+    match channel_id.parse::<u64>() {
+        Ok(channel_id_num) => {
+            // Handle as Discord channel
+            let channel_id_num = ChannelId(channel_id_num);
+
+            if let Some(discord_context) = discord_context_option {
+                let channel_type = fetch::ChannelType::Discord(channel_id_num);
+            
+                if fetch::channel_exists(&channel_id_num, Arc::new(discord_context)).await {
+                    tokio::spawn(async move {
+                        update_channel(
+                            channel_type,
+                            &keypair,
+                            sender,
+                            tx,
+                            refresh_interval_secs,
+                            state_clone,
+                            channel_name,
+                        )
+                        .await;
+                    });
+            
+                    return get_channel_response(event, &xonly_pubkey.to_string());
+                } else {
+                    return nostr_bot::get_reply(
+                        event,
+                        format!("Hi, I wasn't able to find channel ID {} on Discord.", channel_id),
+                    );
+                }
+            } else {
+                return nostr_bot::get_reply(
+                    event,
+                    format!("Hi, I can't add Discord channels at this time because I don't have access to Discord."),
+                );
+            }
+        }
+        Err(_) => {
+            // Handle as RSS feed
+            let channel_type = fetch::ChannelType::RSS(channel_id.clone());
+
             tokio::spawn(async move {
-                update_channel(channel_id_num, &keypair, sender, tx, refresh_interval_secs, state_clone, channel_name).await;
+                update_channel(
+                    channel_type,
+                    &keypair,
+                    sender,
+                    tx,
+                    refresh_interval_secs,
+                    state_clone,
+                    channel_name,
+                )
+                .await;
             });
+        
+            return get_channel_response(event, &xonly_pubkey.to_string());
         }
     }
-
-    get_channel_response(event, &xonly_pubkey.to_string())
 }
 
 fn update_json_file(channel_name: String, public_key: String) -> std::io::Result<()> {
@@ -335,8 +373,9 @@ fn get_channel_response(event: nostr_bot::Event, new_bot_pubkey: &str) -> nostr_
 pub async fn start_existing(state: State) {
 
     let state_lock = state.lock().await;
+    let follows = state_lock.db.lock().unwrap().get_follows();
 
-    for (channel_id, (keypair, channel_name)) in state_lock.db.lock().unwrap().get_follows() {
+    for (channel_id, (keypair, channel_name)) in follows {
 
         let refresh = state_lock.config.refresh_interval_secs;
         let sender_clone = state_lock.sender.clone();
@@ -345,18 +384,35 @@ pub async fn start_existing(state: State) {
 
         if let Ok(channel_id_num) = channel_id.parse::<u64>() {
             tokio::spawn(async move {
-                update_channel(channel_id_num, &keypair, sender_clone, error_sender_clone, refresh, state_clone, channel_name).await;
+                update_channel(
+                    fetch::ChannelType::Discord(ChannelId(channel_id_num)),
+                    &keypair,
+                    sender_clone,
+                    error_sender_clone,
+                    refresh,
+                    state_clone,
+                    channel_name.clone(),
+                )
+                .await;
             });
         } else {
-            warn!("Failed to parse channel_id to u64: {}", channel_id);
-            return;
+            tokio::spawn(async move {
+                update_channel(
+                    fetch::ChannelType::RSS(channel_id.clone()),
+                    &keypair,
+                    sender_clone,
+                    error_sender_clone,
+                    refresh,
+                    state_clone,
+                    channel_name.clone(),
+                )
+                .await;
+            });
         }
     }
 
     info!("Done starting tasks for followed channels.");
 }
-
-
 
 #[allow(dead_code)]
 async fn fake_worker(channel_id: String, refresh_interval_secs: u64) {
@@ -371,7 +427,7 @@ async fn fake_worker(channel_id: String, refresh_interval_secs: u64) {
 }
 
 pub async fn update_channel(
-    channel_id: u64,
+    channel: fetch::ChannelType,
     keypair: &secp256k1::KeyPair,
     sender: nostr_bot::Sender,
     tx: ErrorSender,
@@ -382,83 +438,156 @@ pub async fn update_channel(
     let config = utils::parse_config();
     let state_lock = state.lock().await;
     let discord_context_option = state_lock.discord_context.lock().await.clone();
-    drop(state_lock); 
+    drop(state_lock);
 
-    if let Some(discord_context) = discord_context_option {
+    match channel {
+        fetch::ChannelType::Discord(channel_id) => {
+            if let Some(discord_context) = discord_context_option {
+                let discord_context = Arc::new(discord_context);
+                let rssfeed = format!("https://{}/{}/rss", &config.nitter_instance, channel_name);
+                let pfp = fetch::get_pic_url(&rssfeed).await;
+                let display_name = fetch::get_display_name(&rssfeed).await;
 
-        let discord_context = Arc::new(discord_context);
-        let rssfeed = format!("https://{}/{}/rss", &config.nitter_instance, channel_name);
-        let pfp = discord::get_pic_url(&rssfeed).await;
-        let display_name = discord::get_display_name(&rssfeed).await;
+                let event = nostr_bot::Event::new(
+                    keypair,
+                    utils::unix_timestamp(),
+                    0,
+                    vec![],
+                    format!(
+                        r#"{{
+                            "name":"{}",
+                            "display_name":"{}",
+                            "about":"Twitter feed for @{}. Generated by [dostr](https://github.com/MiningSC/dostr) bot.",
+                            "picture":"{}",
+                            "banner":"",
+                            "nip05":"{}@{}"
+                        }}"#,
+                        channel_name, display_name, channel_name, pfp, channel_name, &config.domain
+                    ),
+                );
 
-        let event = nostr_bot::Event::new(
-            keypair,
-            utils::unix_timestamp(),
-            0,
-            vec![],
-            format!(
-                r#"{{
-                    "name":"{}",
-                    "display_name":"{}",
-                    "about":"Twitter feed for @{}. Generated by [dostr](https://github.com/MiningSC/dostr) bot.",
-                    "picture":"{}",
-                    "banner":"",
-                    "nip05":"{}@nostr.sc"
-                }}"#,
-                channel_name, display_name, channel_name, pfp, channel_name
-            ),
-        );
+                sender.lock().await.send(event).await;
 
-        sender.lock().await.send(event).await;
+                let mut since: chrono::DateTime<chrono::offset::Utc> =
+                    std::time::SystemTime::now().into();
 
-        let mut since: chrono::DateTime<chrono::offset::Local> = std::time::SystemTime::now().into();
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(refresh_interval_secs))
+                        .await;
 
-        loop {
-            tokio::time::sleep(std::time::Duration::from_secs(refresh_interval_secs)).await;
+                    let until = std::time::SystemTime::now().into();
 
-            let until = std::time::SystemTime::now().into();
+                    let new_messages = fetch::get_new_messages(
+                        discord_context.clone(),
+                        channel_id,
+                        since,
+                        until,
+                    )
+                    .await;
 
-            // Fetch new messages
-            let new_messages = discord::get_new_messages(
-                discord_context.clone(),
-                ChannelId::from(channel_id),
-                since,
-                until,
-            )
-            .await;
+                    match new_messages {
+                        Ok(new_messages) => {
+                            since = until;
 
-            match new_messages {
-                Ok(new_messages) => {
-                    since = until;
+                            for message in new_messages.iter().rev() {
+                                let event_non_signed = fetch::get_discord_event(&message).await;
+                                let signed_event = event_non_signed.sign(keypair);
+                                sender.lock().await.send(signed_event).await;
+                            }
 
-                    // Process new messages
-                    for message in new_messages.iter().rev() {
-                        let event_non_signed = discord::get_discord_event(&message).await;
-                        let signed_event = event_non_signed.sign(keypair);
-                        sender.lock().await.send(signed_event).await;
+                            tx.send(ConnectionMessage {
+                                status: ConnectionStatus::Success,
+                                timestamp: std::time::SystemTime::now(),
+                            })
+                            .await
+                            .unwrap();
+                        }
+                        Err(e) => {
+                            tx.send(ConnectionMessage {
+                                status: ConnectionStatus::Failed,
+                                timestamp: std::time::SystemTime::now(),
+                            })
+                            .await
+                            .unwrap();
+
+                            error!("Failed to get new messages for channel {}: {}", channel_id, e);
+                        }
                     }
-
-                    tx.send(ConnectionMessage {
-                        status: ConnectionStatus::Success,
-                        timestamp: std::time::SystemTime::now(),
-                    })
-                    .await
-                    .unwrap();
                 }
-                Err(e) => {
-                    tx.send(ConnectionMessage {
-                        status: ConnectionStatus::Failed,
-                        timestamp: std::time::SystemTime::now(),
-                    })
-                    .await
-                    .unwrap();
+            } else {
+                error!(
+                    "Failed to update channel {}: Discord context is not available.",
+                    channel_id
+                );
+            }
+        }
+        fetch::ChannelType::RSS(channel_id) => {
+            let rssfeed = format!("https://{}/{}/rss", &config.nitter_instance, channel_name);
+            let pfp = fetch::get_pic_url(&rssfeed).await;
+            let display_name = fetch::get_display_name(&rssfeed).await;
 
-                    error!("Failed to get new messages for channel {}: {}", channel_id, e);
+            let event = nostr_bot::Event::new(
+                keypair,
+                utils::unix_timestamp(),
+                0,
+                vec![],
+                format!(
+                    r#"{{
+                        "name":"{}",
+                        "display_name":"{}",
+                        "about":"Twitter feed for @{}. Generated by [dostr](https://github.com/MiningSC/dostr) bot.",
+                        "picture":"{}",
+                        "banner":"",
+                        "nip05":"{}@{}"
+                    }}"#,
+                    channel_name, display_name, channel_name, pfp, channel_name, &config.domain
+                ),
+            );
+
+            sender.lock().await.send(event).await;
+            
+            let mut since: chrono::DateTime<chrono::offset::Utc> =
+                chrono::offset::Utc::now();
+        
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(refresh_interval_secs)).await;
+        
+                let until = chrono::offset::Utc::now();
+        
+                let new_items = fetch::get_new_rss_items(&rssfeed, &since, &until).await;
+        
+                match new_items {
+                    Ok(items) => {
+                        since = until;
+        
+                        for item in items.into_iter() {
+                            let event_non_signed = fetch::get_rss_event(&item).await;
+                            let signed_event = event_non_signed.sign(keypair);
+                            sender.lock().await.send(signed_event).await;
+                        }
+        
+                        tx.send(ConnectionMessage {
+                            status: ConnectionStatus::Success,
+                            timestamp: std::time::SystemTime::now(),
+                        })
+                        .await
+                        .unwrap();
+                    }
+                    Err(e) => {
+                        tx.send(ConnectionMessage {
+                            status: ConnectionStatus::Failed,
+                            timestamp: std::time::SystemTime::now(),
+                        })
+                        .await
+                        .unwrap();
+        
+                        error!(
+                            "Failed to get new items for RSS channel {}: {}",
+                            channel_id, e
+                        );
+                    }
                 }
             }
-
-        }
-    } else {
-        error!("Failed to update channel {}: Discord context is not available.", channel_id);
+        }        
     }
 }

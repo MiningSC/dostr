@@ -8,6 +8,13 @@ use serenity::{
 };
 use std::sync::Arc;
 use rss::Channel;
+use chrono::{DateTime, Utc};
+use scraper::{Html, Selector};
+
+pub enum ChannelType {
+    Discord(ChannelId),
+    RSS(String),
+}
 
 #[allow(dead_code)]
 pub struct DiscordMessage {
@@ -15,11 +22,11 @@ pub struct DiscordMessage {
     message: String,
 }
 
-#[allow(dead_code)]
-impl DiscordMessage {
-    pub fn get_message(&self) -> &String {
-        &self.message
-    }
+pub struct RSSItem {
+    pub timestamp: DateTime<Utc>,
+    pub title: String,
+    pub description: String,
+    pub link: String,
 }
 
 pub struct Handler {
@@ -75,8 +82,8 @@ pub async fn get_channel_name(channel_id: &ChannelId, ctx: Arc<Context>) -> Resu
 pub async fn get_new_messages(
     ctx: Arc<Context>,
     channel_id: ChannelId,
-    since: chrono::DateTime<chrono::offset::Local>,
-    until: chrono::DateTime<chrono::offset::Local>,
+    since: chrono::DateTime<chrono::offset::Utc>,
+    until: chrono::DateTime<chrono::offset::Utc>,
 ) -> Result<Vec<DiscordMessage>, String> {
 
     let messages = channel_id.messages(&ctx, |retriever| retriever.limit(10)).await;
@@ -110,6 +117,19 @@ pub async fn get_discord_event(discord_message: &DiscordMessage) -> nostr_bot::E
         tags: vec![],
         kind: 1,
         content: discord_message.message.clone(),
+    }
+}
+
+pub async fn get_rss_event(item: &RSSItem) -> nostr_bot::EventNonSigned {
+
+    nostr_bot::EventNonSigned {
+        created_at: utils::unix_timestamp(),
+        tags: vec![],
+        kind: 1,
+        content: format!(
+            "{}\n\n{}",
+            item.description, item.link
+        ),
     }
 }
 
@@ -150,4 +170,101 @@ pub async fn get_display_name(feed_url: &String) -> String {
     }
 }
 
+pub async fn get_new_rss_items(
+    feed_url: &str,
+    since: &chrono::DateTime<chrono::offset::Utc>,
+    until: &chrono::DateTime<chrono::offset::Utc>,
+) -> Result<Vec<RSSItem>, String> {
 
+    let feed = match reqwest::get(feed_url).await {
+        Ok(response) => response,
+        Err(err) => return Err(format!("Failed to fetch RSS feed: {}", err)),
+    };
+
+    let body = match feed.text().await {
+        Ok(body) => body,
+        Err(err) => return Err(format!("Failed to read RSS feed response: {}", err)),
+    };
+
+    let channel = match Channel::read_from(body.as_bytes()) {
+        Ok(channel) => channel,
+        Err(err) => return Err(format!("Failed to parse RSS feed: {}", err)),
+    };
+
+    let items = channel.into_items();
+
+    let new_items: Vec<RSSItem> = items
+        .into_iter()
+        .filter(|item| {
+            let pub_date = item
+                .pub_date()
+                .and_then(|pub_date| chrono::DateTime::parse_from_rfc2822(pub_date).ok())
+                .map(|datetime| datetime.with_timezone(&chrono::Utc))
+                .unwrap_or_else(|| chrono::DateTime::from_utc(chrono::NaiveDateTime::from_timestamp_opt(0, 0).unwrap(), chrono::Utc));
+        
+            pub_date > *since && pub_date <= *until
+        })
+        
+        
+        .map(|item| {
+            let description = item.description().unwrap_or_default();
+            let stripped_description = remove_html_tags(&description);
+            let titletest = "title";
+            RSSItem {
+                timestamp: item
+                    .pub_date()
+                    .and_then(|pub_date| chrono::DateTime::parse_from_str(pub_date, "%a, %d %b %Y %H:%M:%S GMT").ok())
+                    .map(|datetime| datetime.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(|| chrono::DateTime::from_utc(chrono::NaiveDateTime::from_timestamp_opt(0, 0).unwrap(), chrono::Utc)),
+                title: titletest.to_string(),
+                description: stripped_description,
+                link: item.link().unwrap_or_default().to_string(),
+            }
+        })
+        
+        .collect();
+    Ok(new_items)
+}
+
+// Function to remove HTML tags using a regular expression
+fn remove_html_tags(description: &str) -> String {
+    let fragment = Html::parse_fragment(description);
+    let img_selector = Selector::parse("img").unwrap();
+    let a_selector = Selector::parse("a").unwrap();
+    let video_selector = Selector::parse("source").unwrap();
+
+    let mut text_parts = Vec::new();
+    let mut media_parts = Vec::new();
+
+    for element in fragment.select(&img_selector) {
+        if let Some(link) = element.value().attr("src") {
+            media_parts.push(link.to_string());
+        }
+    }
+
+    for element in fragment.select(&a_selector) {
+        if let Some(link) = element.value().attr("href") {
+            media_parts.push(link.to_string());
+        }
+    }
+
+    for element in fragment.select(&video_selector) {
+        if let Some(link) = element.value().attr("src") {
+            media_parts.push(link.to_string());
+        }
+    }
+
+    // Remove HTML tags from the text parts
+    let re = regex::Regex::new(r"<[^>]*>").unwrap();
+    let text = re.replace_all(description, "").to_string();
+    text_parts.push(text);
+
+    // Combine the text and media parts
+    let mut result = text_parts.join(" ");
+    for media in media_parts {
+        result.push_str(" ");
+        result.push_str(&media);
+    }
+
+    result
+}
