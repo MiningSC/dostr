@@ -104,7 +104,7 @@ async fn main() {
         .intro_message(&config.hello_message)
         .command(
             nostr_bot::Command::new("!add", nostr_bot::wrap!(dostr::channel_add))
-                .description("Add new channel-id to be followed by the bot. To include a name also use channelid:name")
+                .description("Add new channel-id to be followed by the bot. To include a name also use channelid,name")
         )
         .command(
             nostr_bot::Command::new("!random", nostr_bot::wrap!(dostr::channel_random))
