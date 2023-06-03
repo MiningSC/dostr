@@ -2,7 +2,7 @@
 
 
 **D**iscord to n**ostr**.
-Bot that forwards Discord messages to [Nostr](https://github.com/nostr-protocol/nostr) and includes automatic NIP05 verification and a webserver.
+Bot that forwards Twitter tweets and Discord messages to [Nostr](https://github.com/nostr-protocol/nostr) and includes automatic NIP05 verification and a webserver.  Updated readme coming soon.  RSS support was added so Discord is no longer required to post Tweets to Nostr.
 
 Discord is used as an intermediary due to Twitter locking down it's API.
 
