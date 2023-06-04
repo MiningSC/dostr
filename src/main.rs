@@ -104,15 +104,15 @@ async fn main() {
         .intro_message(&config.hello_message)
         .command(
             nostr_bot::Command::new("!add", nostr_bot::wrap!(dostr::channel_add))
-                .description("Add new channel-id to be followed by the bot. To include a name also use channelid,name")
+                .description("Add new Twitter acount to be followed by the bot. For example, !add @nasa")
         )
         .command(
             nostr_bot::Command::new("!random", nostr_bot::wrap!(dostr::channel_random))
-                .description("Returns random channel-id the bot is following."),
+                .description("Returns random Twitter account the bot is following."),
         )
         .command(
             nostr_bot::Command::new("!list", nostr_bot::wrap!(dostr::channel_list))
-                .description("Returns list of all channel-id's that the bot follows."),
+                .description("Returns list of all Twitter accounts that the bot follows."),
         )
         .command(
             nostr_bot::Command::new("!relays", nostr_bot::wrap_extra!(dostr::channel_relays))

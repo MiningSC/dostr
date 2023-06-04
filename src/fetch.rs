@@ -134,10 +134,38 @@ pub async fn get_rss_event(item: &RSSItem) -> nostr_bot::EventNonSigned {
 }
 
 pub async fn get_pic_url(feed_url: &String) -> String {
-    let content = reqwest::get(feed_url).await.unwrap().bytes().await.unwrap();
-    let channel = Channel::read_from(&content[..]).unwrap();
+    let content = match reqwest::get(feed_url).await {
+        Ok(response) => response.bytes().await,
+        Err(err) => {
+            info!("Failed to fetch RSS feed from URL {}: {}", feed_url, err);
+            return "".to_string();
+        }
+    };
 
-    // Get the image URL from the channel's image field
+    let content_bytes = match content {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            info!("Failed to fetch content for RSS feed from URL {}: {}", feed_url, err);
+            return "".to_string();
+        }
+    };
+
+    let content_str = match String::from_utf8(content_bytes.to_vec()) {
+        Ok(string) => string,
+        Err(err) => {
+            info!("Failed to parse content for RSS feed from URL {}: {}", feed_url, err);
+            return "".to_string();
+        }
+    };
+
+    let channel = match Channel::read_from(content_str.as_bytes()) {
+        Ok(channel) => channel,
+        Err(err) => {
+            info!("Failed to parse RSS feed from URL {}: {}", feed_url, err);
+            return "".to_string();
+        }
+    };
+
     if let Some(image) = channel.image() {
         let pic_url = image.url().to_string();
 
@@ -149,6 +177,59 @@ pub async fn get_pic_url(feed_url: &String) -> String {
 
     info!("Unable to find picture for {}", feed_url);
     "".to_string()
+}
+
+pub async fn get_banner_link(feed_url: &str) -> String {
+    let content = match reqwest::get(feed_url).await {
+        Ok(response) => match response.bytes().await {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                info!("Failed to fetch content for RSS feed from URL {}: {}", feed_url, err);
+                return "".to_string();
+            }
+        },
+        Err(err) => {
+            info!("Failed to fetch RSS feed from URL {}: {}", feed_url, err);
+            return "".to_string();
+        }
+    };
+
+    let content_str = match String::from_utf8(content.to_vec()) {
+        Ok(string) => string,
+        Err(err) => {
+            info!("Failed to parse content for RSS feed from URL {}: {}", feed_url, err);
+            return "".to_string();
+        }
+    };
+
+    let channel = match Channel::read_from(content_str.as_bytes()) {
+        Ok(channel) => channel,
+        Err(err) => {
+            info!("Failed to parse RSS feed from URL {}: {}", feed_url, err);
+            return "".to_string();
+        }
+    };
+
+    return channel.link().to_string();
+}
+
+
+pub async fn get_about(feed_url: &String) -> String {
+    let content = reqwest::get(feed_url).await.unwrap().bytes().await.unwrap();
+    let channel = Channel::read_from(&content[..]).unwrap();
+
+    // Get the channel title
+    let about = channel.description().to_string();
+
+    let strippedabout = remove_about_html_tags(&about);
+
+    if !about.is_empty() {
+        debug!("Found about {} for {}", strippedabout, feed_url);
+        return strippedabout.to_string();
+    } else {
+        info!("Unable to find about for {}", feed_url);
+        "".to_string()
+    }
 }
 
 pub async fn get_display_name(feed_url: &String) -> String {
@@ -267,4 +348,16 @@ fn remove_html_tags(description: &str) -> String {
     }
 
     result
+}
+
+fn remove_about_html_tags(description: &str) -> String {
+    let re_html_tags = regex::Regex::new(r"<[^>]*>").unwrap();
+    let re_urls = regex::Regex::new(r"\bhttps?://\S+\b").unwrap();
+    let re_newlines = regex::Regex::new(r"\n").unwrap();
+
+    let text_without_html_tags = re_html_tags.replace_all(description, "").to_string();
+    let text_without_urls = re_urls.replace_all(&text_without_html_tags, "").to_string();
+    let text_without_newlines = re_newlines.replace_all(&text_without_urls, "").to_string().trim().to_string();
+
+    text_without_newlines
 }
