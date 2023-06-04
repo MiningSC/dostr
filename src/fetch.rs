@@ -354,10 +354,12 @@ fn remove_about_html_tags(description: &str) -> String {
     let re_html_tags = regex::Regex::new(r"<[^>]*>").unwrap();
     let re_urls = regex::Regex::new(r"\bhttps?://\S+\b").unwrap();
     let re_newlines = regex::Regex::new(r"\n").unwrap();
+    let re_at_symbols = regex::Regex::new(r"@").unwrap();
 
     let text_without_html_tags = re_html_tags.replace_all(description, "").to_string();
     let text_without_urls = re_urls.replace_all(&text_without_html_tags, "").to_string();
-    let text_without_newlines = re_newlines.replace_all(&text_without_urls, "").to_string().trim().to_string();
+    let text_without_newlines = re_newlines.replace_all(&text_without_urls, "").to_string();
+    let text_without_at_symbols = re_at_symbols.replace_all(&text_without_newlines, "").to_string().trim().to_string();
 
-    text_without_newlines
+    text_without_at_symbols
 }

@@ -202,7 +202,7 @@ if words.len() < 2 {
 let input = words[1].trim();
 let (channel_id, channel_name) = if input.starts_with('@') {
     // This is a Twitter handle.
-    let channel_id = format!("{}/{}/rss", &config.domain, &input[1..]);  // removing '@'
+    let channel_id = format!("https://{}/{}/rss", &config.nitter_instance, &input[1..]);  // removing '@'
     let channel_name = input[1..].to_string();  // removing '@', no reference
     (channel_id, channel_name)
 } else {
