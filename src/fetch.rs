@@ -10,6 +10,8 @@ use std::sync::Arc;
 use rss::Channel;
 use chrono::{DateTime, Utc};
 use scraper::{Html, Selector};
+use std::collections::{HashSet, HashMap};
+use url::{Url, ParseError as UrlParseError};
 
 pub enum ChannelType {
     Discord(ChannelId),
@@ -315,23 +317,40 @@ fn remove_html_tags(description: &str) -> String {
     let video_selector = Selector::parse("source").unwrap();
 
     let mut text_parts = Vec::new();
-    let mut media_parts = Vec::new();
+    let mut links = HashMap::new();
+    let mut excluded_links = HashSet::new();
 
     for element in fragment.select(&img_selector) {
         if let Some(link) = element.value().attr("src") {
-            media_parts.push(link.to_string());
+            let normalized_link = normalize_link(link);
+            if !links.contains_key(&normalized_link) {
+                links.insert(normalized_link, link.to_string());
+            }
         }
     }
 
     for element in fragment.select(&a_selector) {
         if let Some(link) = element.value().attr("href") {
-            media_parts.push(link.to_string());
+            let normalized_link = normalize_link(link);
+            // Check if the link is the same as the text of the <a> tag
+            let text = element.inner_html();
+            if normalize_link(&text) == normalized_link {
+                excluded_links.insert(normalized_link.clone());
+            }
+            if contains_profile_link(&normalized_link, description) || contains_search_link(&normalized_link) {
+                excluded_links.insert(normalized_link.clone());
+            } else if !links.contains_key(&normalized_link) {
+                links.insert(normalized_link.clone(), normalize_link(link));
+            }
         }
     }
 
     for element in fragment.select(&video_selector) {
         if let Some(link) = element.value().attr("src") {
-            media_parts.push(link.to_string());
+            let normalized_link = normalize_link(link);
+            if !links.contains_key(&normalized_link) {
+                links.insert(normalized_link.clone(), normalize_link(link));
+            }
         }
     }
 
@@ -340,14 +359,46 @@ fn remove_html_tags(description: &str) -> String {
     let text = re.replace_all(description, "").to_string();
     text_parts.push(text);
 
-    // Combine the text and media parts
+    // Combine the text and unique media parts
     let mut result = text_parts.join(" ");
-    for media in media_parts {
-        result.push_str(" ");
-        result.push_str(&media);
+    for (normalized_link, original_link) in &links {
+        if !excluded_links.contains(normalized_link) {
+            result.push_str(" ");
+            result.push_str(original_link);
+        }
     }
 
     result
+}
+
+
+fn normalize_link(link: &str) -> String {
+    let url = Url::parse(link);
+    match url {
+        Ok(mut url) => {
+            url.set_scheme("https").unwrap();
+            url.to_string()
+        },
+        Err(UrlParseError::RelativeUrlWithoutBase) => format!("https://{}", link),
+        Err(e) => panic!("URL parsing error: {}", e),
+    }
+}
+
+fn contains_profile_link(link: &str, description: &str) -> bool {
+    let username_regex = regex::Regex::new(r"@(\w+)").unwrap();
+    let referenced_usernames: Vec<&str> = username_regex
+        .captures_iter(description)
+        .map(|capture| capture.get(1).unwrap().as_str())
+        .collect();
+
+    referenced_usernames.iter().any(|username| {
+        let username_link = format!("/{}", username);
+        link.contains(&username_link)
+    })
+}
+
+fn contains_search_link(link: &str) -> bool {
+    link.contains("/search?q=")
 }
 
 fn remove_about_html_tags(description: &str) -> String {
