@@ -385,17 +385,40 @@ fn normalize_link(link: &str) -> String {
 }
 
 fn contains_profile_link(link: &str, description: &str) -> bool {
-    let username_regex = regex::Regex::new(r"@(\w+)").unwrap();
-    let referenced_usernames: Vec<&str> = username_regex
+    let config = utils::parse_config();
+
+    // Check for @mentions in hyperlinks
+    let hyperlink_username_regex = regex::Regex::new(r"<a[^>]*>@(\w+)</a>").unwrap();
+    let hyperlink_referenced_usernames: Vec<&str> = hyperlink_username_regex
         .captures_iter(description)
         .map(|capture| capture.get(1).unwrap().as_str())
         .collect();
 
-    referenced_usernames.iter().any(|username| {
-        let username_link = format!("/{}", username);
-        link.contains(&username_link)
+    // Check for @mentions in the overall description
+    let description_username_regex = regex::Regex::new(r"@(\w+)").unwrap();
+    let description_referenced_usernames: Vec<&str> = description_username_regex
+        .captures_iter(description)
+        .map(|capture| capture.get(1).unwrap().as_str())
+        .collect();
+
+    // Combine the two sets of usernames into one
+    let all_referenced_usernames: Vec<&str> = [&hyperlink_referenced_usernames[..], &description_referenced_usernames[..]].concat();
+
+    let link_lower = link.to_lowercase(); // Convert link to lowercase
+    all_referenced_usernames.iter().any(|username| {
+        let lower_username = username.to_lowercase();
+        let username_link1 = format!("/{}", lower_username);
+        let username_link2 = format!("https://{}/{}", config.nitter_instance, lower_username);
+
+        if link == &username_link2 {
+            return false;
+        }
+  
+        let link = link_lower.trim_end_matches('/'); // Trim trailing slash
+        link.contains(&username_link1)
     })
 }
+
 
 fn contains_search_link(link: &str) -> bool {
     link.contains("/search?q=")
