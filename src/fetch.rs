@@ -12,6 +12,8 @@ use chrono::{DateTime, Utc};
 use scraper::{Html, Selector};
 use std::collections::{HashSet, HashMap};
 use url::{Url, ParseError as UrlParseError};
+use reqwest::Client;
+use futures::stream::StreamExt;
 
 pub enum ChannelType {
     Discord(ChannelId),
@@ -276,41 +278,91 @@ pub async fn get_new_rss_items(
 
     let items = channel.into_items();
 
-    let new_items: Vec<RSSItem> = items
-        .into_iter()
-        .filter(|item| {
+    let new_items_stream = futures::stream::iter(
+        items.into_iter().filter_map(move |item| {
             let pub_date = item
                 .pub_date()
                 .and_then(|pub_date| chrono::DateTime::parse_from_rfc2822(pub_date).ok())
                 .map(|datetime| datetime.with_timezone(&chrono::Utc))
-                .unwrap_or_else(|| chrono::DateTime::from_utc(chrono::NaiveDateTime::from_timestamp_opt(0, 0).unwrap(), chrono::Utc));
-        
-            pub_date > *since && pub_date <= *until
-        })
-        
-        
-        .map(|item| {
-            let description = item.description().unwrap_or_default();
-            let stripped_description = remove_html_tags(&description);
-            let titletest = "title";
-            RSSItem {
-                timestamp: item
-                    .pub_date()
-                    .and_then(|pub_date| chrono::DateTime::parse_from_str(pub_date, "%a, %d %b %Y %H:%M:%S GMT").ok())
-                    .map(|datetime| datetime.with_timezone(&chrono::Utc))
-                    .unwrap_or_else(|| chrono::DateTime::from_utc(chrono::NaiveDateTime::from_timestamp_opt(0, 0).unwrap(), chrono::Utc)),
-                title: titletest.to_string(),
-                description: stripped_description,
-                link: item.link().unwrap_or_default().to_string(),
+                .unwrap_or_else(|| chrono::DateTime::from_utc(chrono::NaiveDateTime::from_timestamp_opt(0, 0).unwrap_or_else(|| chrono::NaiveDateTime::from_timestamp_opt(0, 0).unwrap_or_else(|| {panic!("Invalid timestamp");})), chrono::Utc));
+
+            if pub_date > *since && pub_date <= *until {
+                Some(item)
+            } else {
+                None
             }
         })
-        
-        .collect();
+    ).then(|item| async move {
+        let description = item.description().unwrap_or_default();
+        let titletest = "title";
+
+        // Fetch the linked page and find the video link (if any)
+        let video_link = match item.link() {
+            Some(link) => {
+                match find_video_link(link).await {
+                    Ok(video_link) => video_link.to_owned(),
+                    Err(err) => {
+                        info!("Error finding video link: {}", err);
+                        String::new() // or handle the error as desired
+                    }
+                }
+            }
+            None => String::new() // handle the case where link is None
+        };
+
+        let video_link_found = !video_link.is_empty();
+        // Pass the video_link_found boolean to the remove_html_tags function
+        let stripped_description = remove_html_tags(&description, video_link_found);
+
+        // Append the video link to the description
+        let description_with_video = format!("{}\n\n{}", stripped_description, video_link);
+
+        RSSItem {
+            timestamp: item
+                .pub_date()
+                .and_then(|pub_date| chrono::DateTime::parse_from_str(pub_date, "%a, %d %b %Y %H:%M:%S GMT").ok())
+                .map(|datetime| datetime.with_timezone(&chrono::Utc))
+                .unwrap_or_else(|| chrono::DateTime::from_utc(chrono::NaiveDateTime::from_timestamp_opt(0, 0).unwrap_or_else(|| { chrono::NaiveDateTime::from_timestamp_opt(0, 0).unwrap_or_else(||{ panic!("Invalid timestamp");}) }), chrono::Utc)),
+            title: titletest.to_string(),
+            description: description_with_video,
+            link: item.link().unwrap_or_default().to_string(),
+        }
+    });
+
+    let new_items: Vec<_> = new_items_stream.collect().await;
     Ok(new_items)
 }
 
+
+
+// Helper function to find the video link on the linked page
+async fn find_video_link(link: &str) -> Result<String, reqwest::Error> {
+    // Create a reqwest client
+    let client = Client::new();
+
+    // Send a GET request to the link and fetch the HTML content
+    let response = client.get(link).send().await?;
+    let body = response.text().await?;
+
+    // Parse the HTML content using scraper
+    let fragment = Html::parse_document(&body);
+
+    // Define a CSS selector to find the video source element
+    let video_selector = Selector::parse("source").unwrap();
+
+    // Find the first source element matching the selector
+    if let Some(video_element) = fragment.select(&video_selector).next() {
+        // Extract the video URL from the "src" attribute
+        if let Some(content) = video_element.value().attr("src") {
+            return Ok(content.to_owned());
+        }
+    }
+    // Return an empty string if no video link was found
+    Ok(String::new())
+}
+
 // Function to remove HTML tags using a regular expression
-fn remove_html_tags(description: &str) -> String {
+fn remove_html_tags(description: &str, video_link_found: bool) -> String {
     let fragment = Html::parse_fragment(description);
     let img_selector = Selector::parse("img").unwrap();
     let a_selector = Selector::parse("a").unwrap();
@@ -363,8 +415,11 @@ fn remove_html_tags(description: &str) -> String {
     let mut result = text_parts.join(" ");
     for (normalized_link, original_link) in &links {
         if !excluded_links.contains(normalized_link) {
-            result.push_str(" ");
-            result.push_str(original_link);
+            // Check if a video link was found and the current link is an image link
+            if !(video_link_found && original_link.starts_with("https://")) {
+                result.push_str(" ");
+                result.push_str(original_link);
+            }
         }
     }
 
