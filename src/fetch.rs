@@ -131,8 +131,8 @@ pub async fn get_rss_event(item: &RSSItem) -> nostr_bot::EventNonSigned {
         tags: vec![],
         kind: 1,
         content: format!(
-            "{}\n\n{}",
-            item.description, item.link
+            "{}",
+            item.description
         ),
     }
 }
@@ -334,7 +334,6 @@ pub async fn get_new_rss_items(
 }
 
 
-
 // Helper function to find the video link on the linked page
 async fn find_video_link(link: &str) -> Result<String, reqwest::Error> {
     // Create a reqwest client
@@ -347,13 +346,13 @@ async fn find_video_link(link: &str) -> Result<String, reqwest::Error> {
     // Parse the HTML content using scraper
     let fragment = Html::parse_document(&body);
 
-    // Define a CSS selector to find the video source element
-    let video_selector = Selector::parse("source").unwrap();
+    // Define a CSS selector to find the video source element inside the div with id "m"
+    let video_selector = Selector::parse("#m source").unwrap();
 
     // Find the first source element matching the selector
-    if let Some(video_element) = fragment.select(&video_selector).next() {
+    if let Some(source_element) = fragment.select(&video_selector).next() {
         // Extract the video URL from the "src" attribute
-        if let Some(content) = video_element.value().attr("src") {
+        if let Some(content) = source_element.value().attr("src") {
             return Ok(content.to_owned());
         }
     }
